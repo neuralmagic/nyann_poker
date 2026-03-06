@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/neuralmagic/nyann_poker/pkg/analysis"
 	"github.com/neuralmagic/nyann_poker/pkg/dataset"
 	"github.com/neuralmagic/nyann_poker/pkg/loadgen"
 	"github.com/neuralmagic/nyann_poker/pkg/recorder"
@@ -49,8 +50,6 @@ func generateCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("creating recorder: %w", err)
 			}
-			defer rec.Close()
-
 			gen := &loadgen.Generator{
 				Target:      target,
 				Model:       model,
@@ -71,7 +70,16 @@ func generateCmd() *cobra.Command {
 			if err := timestamps.Write(tsPath); err != nil {
 				return fmt.Errorf("writing timestamps: %w", err)
 			}
-			fmt.Fprintf(os.Stderr, "timestamps written to %s\n", tsPath)
+
+			// Print end-of-run summary
+			rec.Close()
+			records, err := analysis.LoadRecords(outputDir)
+			if err == nil {
+				summary := analysis.Compute(records, 0, 0)
+				fmt.Fprint(os.Stderr, "\n")
+				fmt.Fprint(os.Stderr, analysis.FormatSummary(summary))
+			}
+
 			return nil
 		},
 	}
