@@ -52,8 +52,6 @@ spec:
             - generate
             - --target
             - ${TARGET}
-            - --model
-            - ${MODEL}
             - --config
             - /etc/nyann-poker/config.json
           volumeMounts:
