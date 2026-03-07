@@ -53,7 +53,7 @@ smoke-test:
 
 # Deploy load generation Job to Kubernetes
 # CONFIG can be a file path or inline JSON string
-deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64':
+deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base':
     #!/usr/bin/env bash
     set -euo pipefail
     kubectl -n {{NAMESPACE}} delete job nyann-poker --ignore-not-found=true
@@ -69,13 +69,17 @@ deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64':
         --from-file=config.json="$CONFIG"
     fi
 
-    # Apply Job
+    # Build and apply Job via kustomize + envsubst
+    OVERLAY_DIR="deploy/base"
+    if [[ "{{OVERLAY}}" != "base" ]]; then
+      OVERLAY_DIR="deploy/overlays/{{OVERLAY}}"
+    fi
     env \
       N_WORKERS={{N_WORKERS}} \
       TARGET={{TARGET}} \
       IMAGE_TAG=latest \
       ARCH={{ARCH}} \
-      envsubst < deploy/job.yaml | kubectl -n {{NAMESPACE}} apply -f -
+      kubectl kustomize "$OVERLAY_DIR" | envsubst | kubectl -n {{NAMESPACE}} apply -f -
 
 # Download ShareGPT and convert to corpus on Lustre
 prep-corpus CORPUS_DIR NAMESPACE='vllm':
