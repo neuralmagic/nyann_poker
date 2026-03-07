@@ -23,9 +23,8 @@ spec:
           args:
             - |
               mkdir -p ${CORPUS_DIR}
-              echo "Downloading ShareGPT..."
-              curl -L -o ${CORPUS_DIR}/ShareGPT_V3_unfiltered_cleaned_split.json \
-                "https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json"
+              echo "Downloading ${SOURCE_NAME}..."
+              curl -L -o ${CORPUS_DIR}/${SOURCE_NAME}.json "${SOURCE_URL}"
               ls -lh ${CORPUS_DIR}/
           volumeMounts:
             - mountPath: /mnt/lustre
@@ -36,9 +35,9 @@ spec:
           args:
             - corpus
             - --input
-            - ${CORPUS_DIR}/ShareGPT_V3_unfiltered_cleaned_split.json
+            - ${CORPUS_DIR}/${SOURCE_NAME}.json
             - --output
-            - ${CORPUS_DIR}/sharegpt.txt
+            - ${CORPUS_DIR}/${SOURCE_NAME}.txt
           volumeMounts:
             - mountPath: /mnt/lustre
               name: lustre

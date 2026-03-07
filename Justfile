@@ -81,11 +81,24 @@ deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base':
       ARCH={{ARCH}} \
       kubectl kustomize "$OVERLAY_DIR" | envsubst | kubectl -n {{NAMESPACE}} apply -f -
 
-# Download ShareGPT and convert to corpus on Lustre
-prep-corpus CORPUS_DIR NAMESPACE='vllm':
+# Download a corpus and convert to flat text on Lustre
+# Sources: sharegpt
+prep-corpus SOURCE CORPUS_DIR NAMESPACE='vllm':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{SOURCE}}" in
+      sharegpt)
+        URL="https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json"
+        ;;
+      *)
+        echo "Unknown source: {{SOURCE}} (options: sharegpt)" >&2
+        exit 1
+        ;;
+    esac
     kubectl -n {{NAMESPACE}} delete job corpus-prep --ignore-not-found=true
-    CORPUS_DIR={{CORPUS_DIR}} envsubst < deploy/corpus-prep.yaml | kubectl -n {{NAMESPACE}} apply -f -
-    @echo "Watching job... (ctrl-c when done)"
+    CORPUS_DIR={{CORPUS_DIR}} SOURCE_URL="$URL" SOURCE_NAME={{SOURCE}} \
+      envsubst < deploy/corpus-prep.yaml | kubectl -n {{NAMESPACE}} apply -f -
+    echo "Watching job... (ctrl-c when done)"
     kubectl -n {{NAMESPACE}} logs -f job/corpus-prep
 
 # Collect JSON summaries from completed Job pods (stdout)
