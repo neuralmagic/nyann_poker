@@ -74,12 +74,11 @@ deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base':
     if [[ "{{OVERLAY}}" != "base" ]]; then
       OVERLAY_DIR="deploy/overlays/{{OVERLAY}}"
     fi
-    env \
-      N_WORKERS={{N_WORKERS}} \
-      TARGET={{TARGET}} \
-      IMAGE_TAG=latest \
-      ARCH={{ARCH}} \
-      kubectl kustomize "$OVERLAY_DIR" | envsubst | kubectl -n {{NAMESPACE}} apply -f -
+    export N_WORKERS={{N_WORKERS}}
+    export TARGET={{TARGET}}
+    export IMAGE_TAG=latest
+    export ARCH={{ARCH}}
+    kubectl kustomize "$OVERLAY_DIR" | envsubst | kubectl -n {{NAMESPACE}} apply -f -
 
 # Download a corpus and convert to flat text on Lustre
 # Sources: sharegpt
