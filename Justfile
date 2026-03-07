@@ -52,21 +52,27 @@ smoke-test:
     echo "Smoke test passed."
 
 # Deploy load generation Job to Kubernetes
-deploy TARGET MODEL CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64':
+# CONFIG can be a file path or inline JSON string
+deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64':
     #!/usr/bin/env bash
     set -euo pipefail
     kubectl -n {{NAMESPACE}} delete job nyann-poker --ignore-not-found=true
     kubectl -n {{NAMESPACE}} delete configmap nyann-poker-config --ignore-not-found=true
 
-    # Create ConfigMap from config file
-    kubectl -n {{NAMESPACE}} create configmap nyann-poker-config \
-      --from-file=config.json={{CONFIG}}
+    # Create ConfigMap — detect inline JSON vs file path
+    CONFIG='{{CONFIG}}'
+    if [[ "$CONFIG" == \{* ]]; then
+      kubectl -n {{NAMESPACE}} create configmap nyann-poker-config \
+        --from-literal=config.json="$CONFIG"
+    else
+      kubectl -n {{NAMESPACE}} create configmap nyann-poker-config \
+        --from-file=config.json="$CONFIG"
+    fi
 
     # Apply Job
     env \
       N_WORKERS={{N_WORKERS}} \
       TARGET={{TARGET}} \
-      MODEL={{MODEL}} \
       IMAGE_TAG=latest \
       ARCH={{ARCH}} \
       envsubst < deploy/job.yaml | kubectl -n {{NAMESPACE}} apply -f -
