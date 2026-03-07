@@ -19,6 +19,8 @@ spec:
       initContainers:
         - name: download
           image: curlimages/curl:8.5.0
+          securityContext:
+            runAsUser: 0
           command: ["sh", "-c"]
           args:
             - |
