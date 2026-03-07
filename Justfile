@@ -77,6 +77,13 @@ deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64':
       ARCH={{ARCH}} \
       envsubst < deploy/job.yaml | kubectl -n {{NAMESPACE}} apply -f -
 
+# Download ShareGPT and convert to corpus on Lustre
+prep-corpus CORPUS_DIR NAMESPACE='vllm':
+    kubectl -n {{NAMESPACE}} delete job corpus-prep --ignore-not-found=true
+    CORPUS_DIR={{CORPUS_DIR}} envsubst < deploy/corpus-prep.yaml | kubectl -n {{NAMESPACE}} apply -f -
+    @echo "Watching job... (ctrl-c when done)"
+    kubectl -n {{NAMESPACE}} logs -f job/corpus-prep
+
 # Collect JSON summaries from completed Job pods (stdout)
 collect NAMESPACE='vllm':
     #!/usr/bin/env bash

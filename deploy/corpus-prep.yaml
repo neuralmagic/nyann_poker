@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: corpus-prep
+  labels:
+    app: nyann-poker
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.present
+                    operator: Exists
+      initContainers:
+        - name: download
+          image: curlimages/curl:8.5.0
+          command: ["sh", "-c"]
+          args:
+            - |
+              mkdir -p ${CORPUS_DIR}
+              echo "Downloading ShareGPT..."
+              curl -L -o ${CORPUS_DIR}/ShareGPT_V3_unfiltered_cleaned_split.json \
+                "https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json"
+              ls -lh ${CORPUS_DIR}/
+          volumeMounts:
+            - mountPath: /mnt/lustre
+              name: lustre
+      containers:
+        - name: convert
+          image: ghcr.io/neuralmagic/nyann_poker:latest
+          args:
+            - corpus
+            - --input
+            - ${CORPUS_DIR}/ShareGPT_V3_unfiltered_cleaned_split.json
+            - --output
+            - ${CORPUS_DIR}/sharegpt.txt
+          volumeMounts:
+            - mountPath: /mnt/lustre
+              name: lustre
+      volumes:
+        - name: lustre
+          persistentVolumeClaim:
+            claimName: lustre-pvc-vllm
