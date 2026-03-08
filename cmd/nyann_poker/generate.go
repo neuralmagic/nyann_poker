@@ -4,27 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/neuralmagic/nyann_poker/pkg/analysis"
 	"github.com/neuralmagic/nyann_poker/pkg/client"
 	"github.com/neuralmagic/nyann_poker/pkg/config"
 	"github.com/neuralmagic/nyann_poker/pkg/dataset"
 	"github.com/neuralmagic/nyann_poker/pkg/loadgen"
+	"github.com/neuralmagic/nyann_poker/pkg/metrics"
 	"github.com/neuralmagic/nyann_poker/pkg/recorder"
 	"github.com/spf13/cobra"
 )
 
 func generateCmd() *cobra.Command {
 	var (
-		target    string
-		model     string
-		cfgInput  string
-		outputDir string
-		workerID  int
+		target     string
+		model      string
+		cfgInput   string
+		outputDir  string
+		workerID   int
+		metricsAddr string
 	)
 
 	cmd := &cobra.Command{
@@ -48,7 +53,8 @@ Load modes:
 Workload types:
   synthetic   Random word padding
   faker       Diverse generated prose (gofakeit)
-  corpus      Sliding window over real text files (--corpus-path in config)`,
+  corpus      Sliding window over real text files (--corpus-path in config)
+  gsm8k       GSM8K math problems with streaming eval (--gsm8k-path in config)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer cancel()
@@ -113,8 +119,16 @@ Workload types:
 				if err != nil {
 					return err
 				}
+			case "gsm8k":
+				if w.GSM8KPath == "" {
+					return fmt.Errorf("workload.gsm8k_path is required for gsm8k type")
+				}
+				ds, err = dataset.NewGSM8K(w.GSM8KPath, w.OSL)
+				if err != nil {
+					return err
+				}
 			default:
-				return fmt.Errorf("unknown workload type: %s (options: synthetic, faker, corpus)", w.Type)
+				return fmt.Errorf("unknown workload type: %s (options: synthetic, faker, corpus, gsm8k)", w.Type)
 			}
 
 			// Build recorder
@@ -126,6 +140,26 @@ Workload types:
 				}
 			} else {
 				rec = recorder.NewMemory()
+			}
+
+			// Start Prometheus metrics server
+			var m *metrics.Metrics
+			if metricsAddr != "" {
+				reg := prometheus.NewRegistry()
+				workloadName := w.Name
+				if workloadName == "" {
+					workloadName = w.Type
+				}
+				m = metrics.New(reg, workloadName)
+				mux := http.NewServeMux()
+				mux.Handle("/metrics", metrics.Handler(reg))
+				srv := &http.Server{Addr: metricsAddr, Handler: mux}
+				go func() {
+					fmt.Fprintf(os.Stderr, "Metrics server listening on %s/metrics\n", metricsAddr)
+					if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+						fmt.Fprintf(os.Stderr, "metrics server error: %v\n", err)
+					}
+				}()
 			}
 
 			// Build and run generator
@@ -140,6 +174,7 @@ Workload types:
 				Duration:    cfg.Load.Duration.Duration(),
 				Dataset:     ds,
 				Recorder:    rec,
+				Metrics:     m,
 			}
 
 			timestamps, err := gen.Run(ctx)
@@ -183,6 +218,7 @@ Workload types:
 	cmd.Flags().StringVar(&cfgInput, "config", "{}", "Workload config (JSON file path or inline JSON)")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory for JSONL + timestamp files (omit for stdout-only)")
 	cmd.Flags().IntVar(&workerID, "worker-id", 0, "Worker identifier (for multi-container runs)")
+	cmd.Flags().StringVar(&metricsAddr, "metrics", "", "Prometheus metrics listen address (e.g. :9090)")
 
 	return cmd
 }

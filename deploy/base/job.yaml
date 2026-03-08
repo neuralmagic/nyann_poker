@@ -48,12 +48,18 @@ spec:
             limits:
               cpu: "4"
               memory: "8Gi"
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
           args:
             - generate
             - --target
             - ${TARGET}
             - --config
             - /etc/nyann-poker/config.json
+            - --metrics
+            - :9090
           volumeMounts:
             - name: config
               mountPath: /etc/nyann-poker

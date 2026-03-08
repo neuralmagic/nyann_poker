@@ -53,7 +53,7 @@ smoke-test:
 
 # Deploy load generation Job to Kubernetes
 # CONFIG can be a file path or inline JSON string
-deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base':
+deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base' IMAGE_TAG='latest':
     #!/usr/bin/env bash
     set -euo pipefail
     kubectl -n {{NAMESPACE}} delete job nyann-poker --ignore-not-found=true
@@ -76,7 +76,7 @@ deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base':
     fi
     export N_WORKERS={{N_WORKERS}}
     export TARGET={{TARGET}}
-    export IMAGE_TAG=latest
+    export IMAGE_TAG={{IMAGE_TAG}}
     export ARCH={{ARCH}}
     kubectl kustomize "$OVERLAY_DIR" | envsubst | kubectl -n {{NAMESPACE}} apply -f -
 
@@ -89,8 +89,11 @@ prep-corpus SOURCE CORPUS_DIR NAMESPACE='vllm':
       sharegpt)
         URL="https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json"
         ;;
+      gsm8k)
+        URL="https://raw.githubusercontent.com/openai/grade-school-math/master/grade_school_math/data/test.jsonl"
+        ;;
       *)
-        echo "Unknown source: {{SOURCE}} (options: sharegpt)" >&2
+        echo "Unknown source: {{SOURCE}} (options: sharegpt, gsm8k)" >&2
         exit 1
         ;;
     esac

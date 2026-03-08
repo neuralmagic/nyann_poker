@@ -11,6 +11,8 @@ import (
 
 	"github.com/neuralmagic/nyann_poker/pkg/client"
 	"github.com/neuralmagic/nyann_poker/pkg/dataset"
+	"github.com/neuralmagic/nyann_poker/pkg/eval"
+	"github.com/neuralmagic/nyann_poker/pkg/metrics"
 	"github.com/neuralmagic/nyann_poker/pkg/recorder"
 )
 
@@ -42,6 +44,7 @@ type Generator struct {
 	Duration    time.Duration
 	Dataset     dataset.Dataset
 	Recorder    *recorder.Recorder
+	Metrics     *metrics.Metrics // Optional Prometheus metrics (nil = disabled)
 }
 
 func (g *Generator) Run(ctx context.Context) (*recorder.Timestamps, error) {
@@ -234,6 +237,9 @@ func (g *Generator) runConversation(ctx context.Context, c *client.Client, strea
 		if result.Err != nil {
 			rec.Status = "error"
 			rec.Error = result.Err.Error()
+			if g.Metrics != nil {
+				g.Metrics.RequestsTotal.WithLabelValues("error").Inc()
+			}
 			if err := g.Recorder.Write(rec); err != nil {
 				fmt.Fprintf(os.Stderr, "recorder write error: %v\n", err)
 			}
@@ -252,6 +258,32 @@ func (g *Generator) runConversation(ctx context.Context, c *client.Client, strea
 		if result.Usage != nil {
 			rec.PromptTokens = result.Usage.PromptTokens
 			rec.OutputTokens = result.Usage.CompletionTokens
+		}
+
+		// Evaluate response if expected answer is set
+		if conv.ExpectedAnswer != "" {
+			extracted := eval.ExtractAnswer(result.Content)
+			correct := eval.CheckCorrect(conv.ExpectedAnswer, extracted)
+			rec.EvalExpected = conv.ExpectedAnswer
+			rec.EvalExtracted = extracted
+			rec.EvalCorrect = &correct
+			if g.Metrics != nil {
+				g.Metrics.RecordEval(correct, extracted != "")
+			}
+		}
+
+		// Emit Prometheus metrics
+		if g.Metrics != nil {
+			g.Metrics.RequestsTotal.WithLabelValues("ok").Inc()
+			if rec.TTFT > 0 {
+				g.Metrics.TTFTSeconds.Observe(rec.TTFT / 1000)
+			}
+			for _, itl := range rec.ITLs {
+				g.Metrics.ITLSeconds.Observe(itl / 1000)
+			}
+			g.Metrics.E2ESeconds.Observe(rec.TotalLatencyMs / 1000)
+			g.Metrics.OutputTokens.Observe(float64(rec.OutputTokens))
+			g.Metrics.PromptTokens.Observe(float64(rec.PromptTokens))
 		}
 
 		if err := g.Recorder.Write(rec); err != nil {

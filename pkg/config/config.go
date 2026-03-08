@@ -26,11 +26,13 @@ type Load struct {
 
 // Workload defines the dataset and request parameters.
 type Workload struct {
-	Type          string  `json:"type"`                    // synthetic, faker, corpus
+	Type          string  `json:"type"`                    // synthetic, faker, corpus, gsm8k
+	Name          string  `json:"name,omitempty"`          // human-readable name for this workload (shown in Prometheus/Grafana)
 	ISL           int     `json:"isl"`                     // input sequence length (tokens)
 	OSL           int     `json:"osl"`                     // output sequence length (tokens)
 	Turns         int     `json:"turns"`                   // turns per conversation
 	CorpusPath    string  `json:"corpus_path,omitempty"`   // path to corpus file/directory
+	GSM8KPath     string  `json:"gsm8k_path,omitempty"`    // path to GSM8K JSONL file
 	CharsPerToken float64 `json:"chars_per_token"`         // override auto-calibrated ratio (0 = auto)
 }
 

@@ -4,8 +4,9 @@ import "github.com/neuralmagic/nyann_poker/pkg/client"
 
 // Conversation is a multi-turn conversation with a max_tokens hint per turn.
 type Conversation struct {
-	Turns     [][]client.Message // Messages for each turn (cumulative history)
-	MaxTokens int                // Requested max output tokens per turn (0 = no limit)
+	Turns          [][]client.Message // Messages for each turn (cumulative history)
+	MaxTokens      int                // Requested max output tokens per turn (0 = no limit)
+	ExpectedAnswer string             // If non-empty, evaluate the model's response against this
 }
 
 // Dataset provides conversations for the load generator.
