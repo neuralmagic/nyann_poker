@@ -3,9 +3,9 @@ package loadgen
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/rand"
-	"os"
 	"sync"
 	"time"
 
@@ -237,7 +237,7 @@ func (g *Generator) runCompletion(ctx context.Context, c *client.Client, streamI
 			g.Metrics.RequestsTotal.WithLabelValues("error").Inc()
 		}
 		if err := g.Recorder.Write(rec); err != nil {
-			fmt.Fprintf(os.Stderr, "recorder write error: %v\n", err)
+			slog.Error("Recorder write error", "error", err)
 		}
 		return
 	}
@@ -263,6 +263,17 @@ func (g *Generator) runCompletion(ctx context.Context, c *client.Client, streamI
 		rec.EvalExpected = conv.ExpectedAnswer
 		rec.EvalExtracted = extracted
 		rec.EvalCorrect = &correct
+		if !correct {
+			snippet := result.Content
+			if len(snippet) > 200 {
+				snippet = snippet[:200] + "..."
+			}
+			slog.Debug("Eval miss",
+				"conv", convID,
+				"expected", conv.ExpectedAnswer,
+				"extracted", extracted,
+				"response", snippet)
+		}
 		if g.Metrics != nil {
 			g.Metrics.RecordEval(correct)
 		}
@@ -283,7 +294,7 @@ func (g *Generator) runCompletion(ctx context.Context, c *client.Client, streamI
 	}
 
 	if err := g.Recorder.Write(rec); err != nil {
-		fmt.Fprintf(os.Stderr, "recorder write error: %v\n", err)
+		slog.Error("Recorder write error", "error", err)
 	}
 }
 
@@ -326,7 +337,7 @@ func (g *Generator) runConversation(ctx context.Context, c *client.Client, strea
 				g.Metrics.RequestsTotal.WithLabelValues("error").Inc()
 			}
 			if err := g.Recorder.Write(rec); err != nil {
-				fmt.Fprintf(os.Stderr, "recorder write error: %v\n", err)
+				slog.Error("Recorder write error", "error", err)
 			}
 			return
 		}
@@ -352,6 +363,17 @@ func (g *Generator) runConversation(ctx context.Context, c *client.Client, strea
 			rec.EvalExpected = conv.ExpectedAnswer
 			rec.EvalExtracted = extracted
 			rec.EvalCorrect = &correct
+			if !correct {
+				snippet := result.Content
+				if len(snippet) > 200 {
+					snippet = snippet[:200] + "..."
+				}
+				slog.Debug("Eval miss",
+					"conv", convID,
+					"expected", conv.ExpectedAnswer,
+					"extracted", extracted,
+					"response", snippet)
+			}
 			if g.Metrics != nil {
 				g.Metrics.RecordEval(correct)
 			}
@@ -372,7 +394,7 @@ func (g *Generator) runConversation(ctx context.Context, c *client.Client, strea
 		}
 
 		if err := g.Recorder.Write(rec); err != nil {
-			fmt.Fprintf(os.Stderr, "recorder write error: %v\n", err)
+			slog.Error("Recorder write error", "error", err)
 		}
 	}
 }

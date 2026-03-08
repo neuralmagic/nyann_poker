@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -77,7 +78,7 @@ Workload types:
 					return fmt.Errorf("auto-detecting model (use --model to specify): %w", err)
 				}
 				model = detected
-				fmt.Fprintf(os.Stderr, "Detected model: %s\n", model)
+				slog.Info("Detected model", "model", model)
 			}
 
 			// Parse config
@@ -95,14 +96,14 @@ Workload types:
 				sample := "The quick brown fox jumps over the lazy dog. This is a sample of natural English text used to calibrate the tokenizer ratio for accurate input sequence length targeting."
 				calibrated, err := c.CalibrateTokenRatio(ctx, sample, model)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "WARNING: tokenizer calibration failed (%v), using default 4.0 chars/token\n", err)
+					slog.Warn("Tokenizer calibration failed, using default", "error", err, "default", 4.0)
 					charsPerToken = 4.0
 				} else {
 					charsPerToken = calibrated
-					fmt.Fprintf(os.Stderr, "Calibrated chars/token: %.2f\n", charsPerToken)
+					slog.Info("Calibrated chars/token", "ratio", charsPerToken)
 				}
 			} else {
-				fmt.Fprintf(os.Stderr, "Using configured chars/token: %.2f\n", charsPerToken)
+				slog.Info("Using configured chars/token", "ratio", charsPerToken)
 			}
 
 			// Build dataset
@@ -161,9 +162,9 @@ Workload types:
 				mux.Handle("/metrics", metrics.Handler(reg))
 				srv := &http.Server{Addr: metricsAddr, Handler: mux}
 				go func() {
-					fmt.Fprintf(os.Stderr, "Metrics server listening on %s/metrics\n", metricsAddr)
+					slog.Info("Metrics server listening", "addr", metricsAddr)
 					if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-						fmt.Fprintf(os.Stderr, "metrics server error: %v\n", err)
+						slog.Error("Metrics server error", "error", err)
 					}
 				}()
 			}
@@ -177,8 +178,10 @@ Workload types:
 					break
 				}
 
-				fmt.Fprintf(os.Stderr, "Stage %d/%d: concurrency=%d duration=%s\n",
-					i+1, len(stages), stage.Concurrency, stage.Duration.Duration())
+				slog.Info("Stage started",
+					"stage", fmt.Sprintf("%d/%d", i+1, len(stages)),
+					"concurrency", stage.Concurrency,
+					"duration", stage.Duration.Duration())
 
 				if m != nil {
 					m.Stage.Set(float64(i))
