@@ -162,7 +162,7 @@ Workload types:
 				if workloadName == "" {
 					workloadName = w.Type
 				}
-				m = metrics.New(reg, workloadName)
+				m = metrics.New(reg, workloadName, w.Type == "gsm8k")
 				mux := http.NewServeMux()
 				mux.Handle("/metrics", metrics.Handler(reg))
 				srv := &http.Server{Addr: metricsAddr, Handler: mux}

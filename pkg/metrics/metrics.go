@@ -28,7 +28,8 @@ type Metrics struct {
 
 // New creates metrics with a workload label identifying the eval/workload name.
 // If workloadName is empty, no workload label is added.
-func New(reg *prometheus.Registry, workloadName string) *Metrics {
+// If enableEval is false, eval metrics (accuracy, correct, incorrect, total) are not registered.
+func New(reg *prometheus.Registry, workloadName string, enableEval bool) *Metrics {
 	var constLabels prometheus.Labels
 	if workloadName != "" {
 		constLabels = prometheus.Labels{"workload": workloadName}
@@ -41,26 +42,6 @@ func New(reg *prometheus.Registry, workloadName string) *Metrics {
 			ConstLabels: constLabels,
 		}, []string{"status"}),
 
-		EvalTotal: prometheus.NewCounter(prometheus.CounterOpts{
-			Name:        "nyann_eval_total",
-			Help:        "Total evaluated responses",
-			ConstLabels: constLabels,
-		}),
-		EvalCorrect: prometheus.NewCounter(prometheus.CounterOpts{
-			Name:        "nyann_eval_correct",
-			Help:        "Correctly answered responses",
-			ConstLabels: constLabels,
-		}),
-		EvalIncorrect: prometheus.NewCounter(prometheus.CounterOpts{
-			Name:        "nyann_eval_incorrect",
-			Help:        "Incorrectly answered responses",
-			ConstLabels: constLabels,
-		}),
-		Accuracy: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name:        "nyann_eval_accuracy",
-			Help:        "Running accuracy (correct / total evaluated)",
-			ConstLabels: constLabels,
-		}),
 		Concurrency: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name:        "nyann_concurrency",
 			Help:        "Current concurrency level",
@@ -106,17 +87,44 @@ func New(reg *prometheus.Registry, workloadName string) *Metrics {
 
 	reg.MustRegister(
 		m.RequestsTotal,
-		m.EvalTotal, m.EvalCorrect, m.EvalIncorrect, m.Accuracy,
 		m.Concurrency, m.Stage,
 		m.TTFTSeconds, m.ITLSeconds, m.E2ESeconds,
 		m.OutputTokens, m.PromptTokens,
 	)
 
+	if enableEval {
+		m.EvalTotal = prometheus.NewCounter(prometheus.CounterOpts{
+			Name:        "nyann_eval_total",
+			Help:        "Total evaluated responses",
+			ConstLabels: constLabels,
+		})
+		m.EvalCorrect = prometheus.NewCounter(prometheus.CounterOpts{
+			Name:        "nyann_eval_correct",
+			Help:        "Correctly answered responses",
+			ConstLabels: constLabels,
+		})
+		m.EvalIncorrect = prometheus.NewCounter(prometheus.CounterOpts{
+			Name:        "nyann_eval_incorrect",
+			Help:        "Incorrectly answered responses",
+			ConstLabels: constLabels,
+		})
+		m.Accuracy = prometheus.NewGauge(prometheus.GaugeOpts{
+			Name:        "nyann_eval_accuracy",
+			Help:        "Running accuracy (correct / total evaluated)",
+			ConstLabels: constLabels,
+		})
+		reg.MustRegister(m.EvalTotal, m.EvalCorrect, m.EvalIncorrect, m.Accuracy)
+	}
+
 	return m
 }
 
 // RecordEval updates eval counters and accuracy gauge.
+// No-op if eval metrics were not enabled.
 func (m *Metrics) RecordEval(correct bool) {
+	if m.EvalTotal == nil {
+		return
+	}
 	m.EvalTotal.Inc()
 	m.totalCount++
 	if correct {
