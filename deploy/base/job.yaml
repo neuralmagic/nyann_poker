@@ -1,9 +1,9 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: nyann-poker
+  name: ${JOB_NAME}
   labels:
-    app: nyann-poker
+    app: ${JOB_NAME}
 spec:
   parallelism: ${N_WORKERS}
   completions: ${N_WORKERS}
@@ -12,7 +12,7 @@ spec:
   template:
     metadata:
       labels:
-        app: nyann-poker
+        app: ${JOB_NAME}
     spec:
       restartPolicy: Never
       affinity:
@@ -69,4 +69,4 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: nyann-poker-config
+            name: ${JOB_NAME}-config

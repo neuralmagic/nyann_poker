@@ -53,19 +53,20 @@ smoke-test:
 
 # Deploy load generation Job to Kubernetes
 # CONFIG can be a file path or inline JSON string
-deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base' IMAGE_TAG='latest' LOG_LEVEL='info':
+# NAME allows running multiple jobs side-by-side (e.g. "eval" + "load")
+deploy NAME TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base' IMAGE_TAG='latest' LOG_LEVEL='info':
     #!/usr/bin/env bash
     set -euo pipefail
-    kubectl -n {{NAMESPACE}} delete job nyann-poker --ignore-not-found=true
-    kubectl -n {{NAMESPACE}} delete configmap nyann-poker-config --ignore-not-found=true
+    kubectl -n {{NAMESPACE}} delete job {{NAME}} --ignore-not-found=true
+    kubectl -n {{NAMESPACE}} delete configmap {{NAME}}-config --ignore-not-found=true
 
     # Create ConfigMap — detect inline JSON vs file path
     CONFIG='{{CONFIG}}'
     if [[ "$CONFIG" == \{* ]]; then
-      kubectl -n {{NAMESPACE}} create configmap nyann-poker-config \
+      kubectl -n {{NAMESPACE}} create configmap {{NAME}}-config \
         --from-literal=config.json="$CONFIG"
     else
-      kubectl -n {{NAMESPACE}} create configmap nyann-poker-config \
+      kubectl -n {{NAMESPACE}} create configmap {{NAME}}-config \
         --from-file=config.json="$CONFIG"
     fi
 
@@ -74,6 +75,7 @@ deploy TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base' 
     if [[ "{{OVERLAY}}" != "base" ]]; then
       OVERLAY_DIR="deploy/overlays/{{OVERLAY}}"
     fi
+    export JOB_NAME={{NAME}}
     export N_WORKERS={{N_WORKERS}}
     export TARGET={{TARGET}}
     export IMAGE_TAG={{IMAGE_TAG}}
@@ -157,17 +159,17 @@ prep-gsm8k OUTPUT_DIR NAMESPACE='vllm':
       && kubectl -n {{NAMESPACE}} logs job/gsm8k-prep
 
 # Collect JSON summaries from completed Job pods (stdout)
-collect NAMESPACE='vllm':
+collect NAME NAMESPACE='vllm':
     #!/usr/bin/env bash
     set -euo pipefail
-    for POD in $(kubectl -n {{NAMESPACE}} get pods -l app=nyann-poker -o jsonpath='{.items[*].metadata.name}'); do
+    for POD in $(kubectl -n {{NAMESPACE}} get pods -l app={{NAME}} -o jsonpath='{.items[*].metadata.name}'); do
       echo "--- $POD ---"
       kubectl -n {{NAMESPACE}} logs "$POD" -c nyann-poker
     done
 
 # Tail logs from running Job
-logs NAMESPACE='vllm':
-    kubectl -n {{NAMESPACE}} logs -l app=nyann-poker -c nyann-poker --tail=50 -f
+logs NAME NAMESPACE='vllm':
+    kubectl -n {{NAMESPACE}} logs -l app={{NAME}} -c nyann-poker --tail=50 -f
 
 clean:
     rm -f nyann_poker nyann_poker-linux-amd64 nyann_poker-linux-arm64
