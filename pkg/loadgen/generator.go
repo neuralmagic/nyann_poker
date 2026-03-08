@@ -210,11 +210,12 @@ func (g *Generator) runStream(ctx context.Context, c *client.Client, streamID in
 
 func (g *Generator) runCompletion(ctx context.Context, c *client.Client, streamID int, convID string, conv dataset.Conversation) {
 	req := &client.CompletionRequest{
-		Model:     g.Model,
-		Prompt:    conv.Prompt,
-		Stream:    true,
-		MaxTokens: conv.MaxTokens,
-		Stop:      conv.Stop,
+		Model:       g.Model,
+		Prompt:      conv.Prompt,
+		Stream:      true,
+		MaxTokens:   conv.MaxTokens,
+		Stop:        conv.Stop,
+		Temperature: conv.Temperature,
 	}
 
 	result := c.CompletionStream(ctx, req)

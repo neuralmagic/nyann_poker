@@ -25,11 +25,12 @@ type Request struct {
 }
 
 type CompletionRequest struct {
-	Model     string   `json:"model"`
-	Prompt    string   `json:"prompt"`
-	Stream    bool     `json:"stream"`
-	MaxTokens int      `json:"max_tokens,omitempty"`
-	Stop      []string `json:"stop,omitempty"`
+	Model       string    `json:"model"`
+	Prompt      string    `json:"prompt"`
+	Stream      bool      `json:"stream"`
+	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Stop        []string  `json:"stop,omitempty"`
+	Temperature *float64  `json:"temperature,omitempty"`
 }
 
 type TokenEvent struct {

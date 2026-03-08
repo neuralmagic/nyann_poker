@@ -8,6 +8,7 @@ type Conversation struct {
 	Prompt         string             // If non-empty, use completions API instead of chat (single-turn only)
 	MaxTokens      int                // Requested max output tokens per turn (0 = no limit)
 	Stop           []string           // Stop sequences for completions API
+	Temperature    *float64           // Sampling temperature (nil = server default)
 	ExpectedAnswer string             // If non-empty, evaluate the model's response against this
 }
 

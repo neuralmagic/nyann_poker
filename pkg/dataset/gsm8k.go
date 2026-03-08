@@ -72,10 +72,12 @@ func (g *GSM8K) NextConversation() Conversation {
 
 	prompt := g.buildPrompt(item)
 
+	greedy := 0.0
 	return Conversation{
 		Prompt:         prompt,
 		MaxTokens:      256, // matches lm_eval default; stop sequences end it early
 		Stop:           []string{"Question:", "</s>", "<|im_end|>"},
+		Temperature:    &greedy,
 		ExpectedAnswer: eval.ExtractExpected(item.Answer),
 	}
 }
