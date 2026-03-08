@@ -3,13 +3,13 @@
     "min": 64,
     "max": 2048,
     "steps": 20,
-    "step_duration": "60s"
+    "step_duration": "300s"
   },
   "workload": {
     "type": "corpus",
     "corpus_path": "/mnt/lustre/tms/corpus/sharegpt.txt",
-    "isl": 1500,
-    "osl": 500,
+    "isl": 500,
+    "osl": 1500,
     "turns": 1
   }
 }
