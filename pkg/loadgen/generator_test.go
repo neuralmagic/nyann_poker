@@ -491,6 +491,64 @@ func (d *completionEvalDataset) NextConversation() dataset.Conversation {
 	}
 }
 
+func TestRunStagesPoolResize(t *testing.T) {
+	addr := startMockServer(t)
+	outDir := t.TempDir()
+
+	rec, err := recorder.New(outDir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rec.Close()
+
+	gen := &loadgen.Generator{
+		Target:   "http://" + addr + "/v1",
+		Model:    "test-model",
+		Dataset:  dataset.NewSynthetic(32, 10, 1, 4.0),
+		Recorder: rec,
+	}
+
+	stages := []loadgen.Stage{
+		{Concurrency: 2, Duration: 500 * time.Millisecond},
+		{Concurrency: 8, Duration: 500 * time.Millisecond},
+		{Concurrency: 4, Duration: 500 * time.Millisecond},
+	}
+
+	var stageLog []int
+	gen.RunStages(context.Background(), stages, func(i, concurrency int) {
+		stageLog = append(stageLog, concurrency)
+	})
+
+	if len(stageLog) != 3 {
+		t.Fatalf("expected 3 stage callbacks, got %d", len(stageLog))
+	}
+	if stageLog[0] != 2 || stageLog[1] != 8 || stageLog[2] != 4 {
+		t.Errorf("unexpected stage concurrencies: %v", stageLog)
+	}
+
+	rec.Close()
+	records := readRecords(t, filepath.Join(outDir, "requests_0.jsonl"))
+	if len(records) == 0 {
+		t.Fatal("expected records from pool-based stages")
+	}
+
+	// Verify no large gaps between requests (pool should not tear down between stages).
+	// With the mock server (5ms TTFT + 10*1ms ITL = ~15ms per request), a gap > 200ms
+	// would indicate the pool was torn down and restarted.
+	var maxGap float64
+	for i := 1; i < len(records); i++ {
+		gap := records[i].StartTime - records[i-1].EndTime
+		if gap > maxGap {
+			maxGap = gap
+		}
+	}
+	// With multiple concurrent streams, gaps should be minimal.
+	// A torn-down pool would show gaps of 100ms+ as all streams finish then restart.
+	if maxGap > 0.2 {
+		t.Errorf("max gap between requests was %.3fs, expected < 0.2s (pool may have torn down between stages)", maxGap)
+	}
+}
+
 func readRecords(t *testing.T, path string) []recorder.Record {
 	t.Helper()
 	data, err := os.ReadFile(path)

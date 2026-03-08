@@ -175,42 +175,40 @@ Workload types:
 			}
 
 			// Run stages
-			stages := cfg.EffectiveStages()
+			cfgStages := cfg.EffectiveStages()
 			startTime := time.Now()
 
-			for i, stage := range stages {
-				if ctx.Err() != nil {
-					break
-				}
+			gen := &loadgen.Generator{
+				Target:      target,
+				Model:       model,
+				Mode:        loadgen.Mode(cfg.Load.Mode),
+				Rate:        cfg.Load.Rate,
+				MaxInFlight: cfg.Load.MaxInFlight,
+				Rampup:      cfg.Load.Rampup.Duration(),
+				Dataset:     ds,
+				Recorder:    rec,
+				Metrics:     m,
+			}
 
-				slog.Info("Stage started",
-					"stage", fmt.Sprintf("%d/%d", i+1, len(stages)),
-					"concurrency", stage.Concurrency,
-					"duration", stage.Duration.Duration())
-
-				if m != nil {
-					m.Stage.Set(float64(i))
-					m.Concurrency.Set(float64(stage.Concurrency))
-				}
-
-				gen := &loadgen.Generator{
-					Target:      target,
-					Model:       model,
-					Mode:        loadgen.Mode(cfg.Load.Mode),
-					Concurrency: stage.Concurrency,
-					Rate:        cfg.Load.Rate,
-					MaxInFlight: cfg.Load.MaxInFlight,
-					Rampup:      cfg.Load.Rampup.Duration(),
-					Duration:    stage.Duration.Duration(),
-					Dataset:     ds,
-					Recorder:    rec,
-					Metrics:     m,
-				}
-
-				if _, err := gen.Run(ctx); err != nil {
-					return err
+			// Convert config stages to loadgen stages
+			stages := make([]loadgen.Stage, len(cfgStages))
+			for i, s := range cfgStages {
+				stages[i] = loadgen.Stage{
+					Concurrency: s.Concurrency,
+					Duration:    s.Duration.Duration(),
 				}
 			}
+
+			gen.RunStages(ctx, stages, func(i, concurrency int) {
+				slog.Info("Stage started",
+					"stage", fmt.Sprintf("%d/%d", i+1, len(stages)),
+					"concurrency", concurrency,
+					"duration", stages[i].Duration)
+				if m != nil {
+					m.Stage.Set(float64(i))
+					m.Concurrency.Set(float64(concurrency))
+				}
+			})
 
 			endTime := time.Now()
 			timestamps := &recorder.Timestamps{

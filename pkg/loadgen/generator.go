@@ -47,6 +47,110 @@ type Generator struct {
 	Metrics     *metrics.Metrics // Optional Prometheus metrics (nil = disabled)
 }
 
+// streamPool manages a resizable pool of concurrent streams.
+// Streams are added/removed dynamically without tearing down existing ones.
+type streamPool struct {
+	g       *Generator
+	c       *client.Client
+	mu      sync.Mutex
+	streams map[int]context.CancelFunc // streamID -> cancel
+	nextID  int
+	wg      sync.WaitGroup
+}
+
+func newStreamPool(g *Generator, c *client.Client) *streamPool {
+	return &streamPool{
+		g:       g,
+		c:       c,
+		streams: make(map[int]context.CancelFunc),
+	}
+}
+
+// Resize adjusts the pool to the target concurrency.
+// New streams start immediately; excess streams are cancelled
+// (they finish their current in-flight request, then exit).
+func (p *streamPool) Resize(ctx context.Context, target int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	current := len(p.streams)
+
+	// Add streams
+	for current < target {
+		id := p.nextID
+		p.nextID++
+		streamCtx, cancel := context.WithCancel(ctx)
+		p.streams[id] = cancel
+		p.wg.Add(1)
+		go func(sid int, sctx context.Context) {
+			defer p.wg.Done()
+			p.g.runStream(sctx, p.c, sid, 0)
+			p.mu.Lock()
+			delete(p.streams, sid)
+			p.mu.Unlock()
+		}(id, streamCtx)
+		current++
+	}
+
+	// Remove excess streams (cancel the most recently added)
+	for current > target {
+		// Find any stream to cancel
+		for id, cancel := range p.streams {
+			cancel()
+			delete(p.streams, id)
+			break
+		}
+		current--
+	}
+}
+
+// Wait blocks until all streams have exited.
+func (p *streamPool) Wait() {
+	p.wg.Wait()
+}
+
+// Stop cancels all streams and waits for them to finish.
+func (p *streamPool) Stop() {
+	p.mu.Lock()
+	for id, cancel := range p.streams {
+		cancel()
+		delete(p.streams, id)
+	}
+	p.mu.Unlock()
+	p.wg.Wait()
+}
+
+// Stage defines a concurrency level and duration for RunStages.
+type Stage struct {
+	Concurrency int
+	Duration    time.Duration
+}
+
+// RunStages runs multiple stages with a shared goroutine pool, dynamically
+// resizing concurrency between stages without tearing down in-flight requests.
+// The onStage callback is called before each stage starts (for logging/metrics).
+func (g *Generator) RunStages(ctx context.Context, stages []Stage, onStage func(index, concurrency int)) {
+	c := client.New(g.Target)
+	pool := newStreamPool(g, c)
+
+	for i, stage := range stages {
+		if ctx.Err() != nil {
+			break
+		}
+		if onStage != nil {
+			onStage(i, stage.Concurrency)
+		}
+		pool.Resize(ctx, stage.Concurrency)
+
+		select {
+		case <-ctx.Done():
+		case <-time.After(stage.Duration):
+		}
+	}
+
+	pool.Stop()
+}
+
 func (g *Generator) Run(ctx context.Context) (*recorder.Timestamps, error) {
 	c := client.New(g.Target)
 
