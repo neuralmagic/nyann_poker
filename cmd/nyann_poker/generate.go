@@ -124,9 +124,8 @@ Workload types:
 				if w.GSM8KPath == "" {
 					return fmt.Errorf("workload.gsm8k_path is required for gsm8k type")
 				}
-				if w.OSL != 0 {
-					return fmt.Errorf("workload.osl must not be set for gsm8k (model must generate freely to produce the answer)")
-				}
+				// Clear default OSL — GSM8K must generate freely
+				w.OSL = 0
 				if w.NumFewShot > 0 && w.GSM8KTrainPath == "" {
 					return fmt.Errorf("workload.gsm8k_train_path is required when num_fewshot > 0")
 				}
