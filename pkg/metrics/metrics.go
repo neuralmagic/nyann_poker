@@ -10,6 +10,7 @@ import (
 // Metrics exposes Prometheus metrics for streaming eval.
 type Metrics struct {
 	RequestsTotal   *prometheus.CounterVec
+	FinishReasons   *prometheus.CounterVec
 	EvalTotal       prometheus.Counter
 	EvalCorrect     prometheus.Counter
 	EvalIncorrect   prometheus.Counter
@@ -41,6 +42,12 @@ func New(reg *prometheus.Registry, workloadName string, enableEval bool) *Metric
 			Help:        "Total requests by status",
 			ConstLabels: constLabels,
 		}, []string{"status"}),
+
+		FinishReasons: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name:        "nyann_finish_reason_total",
+			Help:        "Requests by finish reason",
+			ConstLabels: constLabels,
+		}, []string{"reason"}),
 
 		Concurrency: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name:        "nyann_concurrency",
@@ -86,7 +93,7 @@ func New(reg *prometheus.Registry, workloadName string, enableEval bool) *Metric
 	}
 
 	reg.MustRegister(
-		m.RequestsTotal,
+		m.RequestsTotal, m.FinishReasons,
 		m.Concurrency, m.Stage,
 		m.TTFTSeconds, m.ITLSeconds, m.E2ESeconds,
 		m.OutputTokens, m.PromptTokens,
