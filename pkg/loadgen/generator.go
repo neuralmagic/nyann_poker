@@ -2,10 +2,12 @@ package loadgen
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"math"
-	"math/rand"
+	mathrand "math/rand"
 	"sync"
 	"time"
 
@@ -235,7 +237,7 @@ func (g *Generator) runRateBased(ctx context.Context, c *client.Client, startTim
 		var gap time.Duration
 		if poisson {
 			// Exponential inter-arrival time
-			gap = time.Duration(float64(time.Second) * (-math.Log(1-rand.Float64()) / rate))
+			gap = time.Duration(float64(time.Second) * (-math.Log(1-mathrand.Float64()) / rate))
 		} else {
 			gap = time.Duration(float64(time.Second) / rate)
 		}
@@ -337,6 +339,20 @@ func (g *Generator) runStream(ctx context.Context, c *client.Client, streamID in
 	}
 }
 
+// cacheSalt returns the cache salt for a single request.
+// Returns "" (omitted), a per-request random salt, or the configured fixed salt.
+func (g *Generator) cacheSalt() string {
+	if g.CacheSalt == "" {
+		return ""
+	}
+	if g.CacheSalt == "random" {
+		var b [32]byte
+		rand.Read(b[:])
+		return base64.RawURLEncoding.EncodeToString(b[:])
+	}
+	return g.CacheSalt
+}
+
 func (g *Generator) runCompletion(ctx context.Context, c *client.Client, streamID int, convID string, conv dataset.Conversation) {
 	req := &client.CompletionRequest{
 		Model:       g.Model,
@@ -345,7 +361,7 @@ func (g *Generator) runCompletion(ctx context.Context, c *client.Client, streamI
 		MaxTokens:   conv.MaxTokens,
 		Stop:        conv.Stop,
 		Temperature: conv.Temperature,
-		CacheSalt:   g.CacheSalt,
+		CacheSalt:   g.cacheSalt(),
 	}
 
 	result := c.CompletionStream(ctx, req)
@@ -452,7 +468,7 @@ func (g *Generator) runConversation(ctx context.Context, c *client.Client, strea
 			Messages:  messages,
 			Stream:    true,
 			MaxTokens: conv.MaxTokens,
-			CacheSalt: g.CacheSalt,
+			CacheSalt: g.cacheSalt(),
 		}
 
 		result := c.ChatStream(ctx, req)
