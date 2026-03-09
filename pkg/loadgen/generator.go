@@ -46,7 +46,8 @@ type Generator struct {
 	Duration    time.Duration
 	Dataset     dataset.Dataset
 	Recorder    *recorder.Recorder
-	CacheSalt   string           // If non-empty, sent as cache_salt on every request
+	CacheSalt       string // Fixed cache salt for every request
+	RandomCacheSalt bool   // Generate unique cache salt per request
 	Metrics     *metrics.Metrics // Optional Prometheus metrics (nil = disabled)
 }
 
@@ -340,12 +341,8 @@ func (g *Generator) runStream(ctx context.Context, c *client.Client, streamID in
 }
 
 // cacheSalt returns the cache salt for a single request.
-// Returns "" (omitted), a per-request random salt, or the configured fixed salt.
 func (g *Generator) cacheSalt() string {
-	if g.CacheSalt == "" {
-		return ""
-	}
-	if g.CacheSalt == "random" {
+	if g.RandomCacheSalt {
 		var b [32]byte
 		rand.Read(b[:])
 		return base64.RawURLEncoding.EncodeToString(b[:])

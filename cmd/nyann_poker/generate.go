@@ -95,8 +95,10 @@ Workload types:
 			}
 
 			w := cfg.Workload
-			if w.CacheSalt != "" {
-				slog.Info("Cache salt enabled", "length", len(w.CacheSalt))
+			if w.RandomCacheSalt {
+				slog.Info("Cache salt enabled", "mode", "random")
+			} else if w.CacheSalt != "" {
+				slog.Info("Cache salt enabled", "mode", "fixed", "length", len(w.CacheSalt))
 			}
 
 			// Calibrate chars-per-token ratio
@@ -191,12 +193,13 @@ Workload types:
 					"duration", cfg.Warmup.Duration.Duration())
 				warmupRec := recorder.NewMemory()
 				warmupGen := &loadgen.Generator{
-					Target:    target,
-					Model:     model,
-					Mode:      loadgen.Mode(cfg.Load.Mode),
-					CacheSalt: w.CacheSalt,
-					Dataset:   ds,
-					Recorder:  warmupRec,
+					Target:          target,
+					Model:           model,
+					Mode:            loadgen.Mode(cfg.Load.Mode),
+					CacheSalt:       w.CacheSalt,
+					RandomCacheSalt: w.RandomCacheSalt,
+					Dataset:         ds,
+					Recorder:        warmupRec,
 				}
 				warmupStages := []loadgen.Stage{{
 					Concurrency: cfg.Warmup.Concurrency,
@@ -215,16 +218,17 @@ Workload types:
 			startTime := time.Now()
 
 			gen := &loadgen.Generator{
-				Target:      target,
-				Model:       model,
-				Mode:        loadgen.Mode(cfg.Load.Mode),
-				Rate:        cfg.Load.Rate,
-				MaxInFlight: cfg.Load.MaxInFlight,
-				Rampup:      cfg.Load.Rampup.Duration(),
-				CacheSalt:   w.CacheSalt,
-				Dataset:     ds,
-				Recorder:    rec,
-				Metrics:     m,
+				Target:          target,
+				Model:           model,
+				Mode:            loadgen.Mode(cfg.Load.Mode),
+				Rate:            cfg.Load.Rate,
+				MaxInFlight:     cfg.Load.MaxInFlight,
+				Rampup:          cfg.Load.Rampup.Duration(),
+				CacheSalt:       w.CacheSalt,
+				RandomCacheSalt: w.RandomCacheSalt,
+				Dataset:         ds,
+				Recorder:        rec,
+				Metrics:         m,
 			}
 
 			// Convert config stages to loadgen stages

@@ -8,6 +8,6 @@
     "isl": 500,
     "osl": 1500,
     "turns": 1,
-    "cache_salt": "random"
+    "random_cache_salt": true
   }
 }
