@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +38,10 @@ func NewCorpus(corpusPath string, isl, osl, turns int, charsPerToken float64) (*
 		return nil, fmt.Errorf("corpus at %s is empty", corpusPath)
 	}
 
-	return &Corpus{ISL: isl, OSL: osl, Turns: turns, CharsPerToken: charsPerToken, text: text}, nil
+	c := &Corpus{ISL: isl, OSL: osl, Turns: turns, CharsPerToken: charsPerToken, text: text}
+	// Start at a random offset so multiple workers don't read the same text
+	c.offset.Store(uint64(rand.Intn(len(text))))
+	return c, nil
 }
 
 func (c *Corpus) NextConversation() Conversation {
