@@ -63,6 +63,9 @@ func NewGSM8K(testPath string, trainPath string, numFewShot int) (*GSM8K, error)
 		}
 	}
 
+	// Shuffle so multiple workers don't all start at the same question
+	rand.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
+
 	return &GSM8K{items: items, fewShot: fewShot, nShot: numFewShot}, nil
 }
 

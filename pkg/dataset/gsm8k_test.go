@@ -35,11 +35,11 @@ func TestGSM8KFromJSONL(t *testing.T) {
 	if conv.MaxTokens != 256 {
 		t.Errorf("expected MaxTokens=256 (lm_eval default), got %d", conv.MaxTokens)
 	}
-	if conv.ExpectedAnswer != "12" {
-		t.Errorf("expected answer '12', got %q", conv.ExpectedAnswer)
+	if conv.ExpectedAnswer != "12" && conv.ExpectedAnswer != "21" {
+		t.Errorf("expected answer '12' or '21', got %q", conv.ExpectedAnswer)
 	}
 	// 0-shot: should just be "Question: ...\nAnswer:"
-	if !strings.HasPrefix(conv.Prompt, "Question: If there are 3 cars") {
+	if !strings.HasPrefix(conv.Prompt, "Question: ") {
 		t.Errorf("unexpected prompt start: %s", conv.Prompt[:50])
 	}
 	if !strings.HasSuffix(conv.Prompt, "\nAnswer:") {
@@ -64,11 +64,10 @@ func TestGSM8KFromJSONArray(t *testing.T) {
 	c1 := ds.NextConversation()
 	c2 := ds.NextConversation()
 
-	if c1.ExpectedAnswer != "4" {
-		t.Errorf("expected '4', got %q", c1.ExpectedAnswer)
-	}
-	if c2.ExpectedAnswer != "15" {
-		t.Errorf("expected '15', got %q", c2.ExpectedAnswer)
+	// Order is randomized, but both answers should be present
+	answers := map[string]bool{c1.ExpectedAnswer: true, c2.ExpectedAnswer: true}
+	if !answers["4"] || !answers["15"] {
+		t.Errorf("expected answers '4' and '15', got %q and %q", c1.ExpectedAnswer, c2.ExpectedAnswer)
 	}
 }
 
@@ -88,13 +87,13 @@ func TestGSM8KWrapsAround(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Consume both items, then should wrap around
+	// Consume both items, then should wrap around to a valid answer
 	ds.NextConversation()
 	ds.NextConversation()
 	c3 := ds.NextConversation()
 
-	if c3.ExpectedAnswer != "1" {
-		t.Errorf("expected wrap-around to '1', got %q", c3.ExpectedAnswer)
+	if c3.ExpectedAnswer != "1" && c3.ExpectedAnswer != "2" {
+		t.Errorf("expected wrap-around to '1' or '2', got %q", c3.ExpectedAnswer)
 	}
 }
 
