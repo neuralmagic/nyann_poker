@@ -14,7 +14,6 @@ type Metrics struct {
 	EvalTotal       prometheus.Counter
 	EvalCorrect     prometheus.Counter
 	EvalIncorrect   prometheus.Counter
-	Accuracy        prometheus.Gauge
 	Concurrency     prometheus.Gauge
 	Stage           prometheus.Gauge
 	TTFTSeconds     prometheus.Histogram
@@ -23,8 +22,6 @@ type Metrics struct {
 	OutputTokens    prometheus.Histogram
 	PromptTokens    prometheus.Histogram
 
-	correctCount float64
-	totalCount   float64
 }
 
 // New creates metrics with a workload label identifying the eval/workload name.
@@ -115,33 +112,23 @@ func New(reg *prometheus.Registry, workloadName string, enableEval bool) *Metric
 			Help:        "Incorrectly answered responses",
 			ConstLabels: constLabels,
 		})
-		m.Accuracy = prometheus.NewGauge(prometheus.GaugeOpts{
-			Name:        "nyann_eval_accuracy",
-			Help:        "Running accuracy (correct / total evaluated)",
-			ConstLabels: constLabels,
-		})
-		reg.MustRegister(m.EvalTotal, m.EvalCorrect, m.EvalIncorrect, m.Accuracy)
+		reg.MustRegister(m.EvalTotal, m.EvalCorrect, m.EvalIncorrect)
 	}
 
 	return m
 }
 
-// RecordEval updates eval counters and accuracy gauge.
+// RecordEval updates eval counters.
 // No-op if eval metrics were not enabled.
 func (m *Metrics) RecordEval(correct bool) {
 	if m.EvalTotal == nil {
 		return
 	}
 	m.EvalTotal.Inc()
-	m.totalCount++
 	if correct {
 		m.EvalCorrect.Inc()
-		m.correctCount++
 	} else {
 		m.EvalIncorrect.Inc()
-	}
-	if m.totalCount > 0 {
-		m.Accuracy.Set(m.correctCount / m.totalCount)
 	}
 }
 
