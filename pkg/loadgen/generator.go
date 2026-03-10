@@ -2,14 +2,17 @@ package loadgen
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"math"
-	"math/rand"
+	mathrand "math/rand"
 	"sync"
 	"time"
 
 	"github.com/neuralmagic/nyann_poker/pkg/client"
+	"github.com/neuralmagic/nyann_poker/pkg/config"
 	"github.com/neuralmagic/nyann_poker/pkg/dataset"
 	"github.com/neuralmagic/nyann_poker/pkg/eval"
 	"github.com/neuralmagic/nyann_poker/pkg/metrics"
@@ -44,6 +47,7 @@ type Generator struct {
 	Duration    time.Duration
 	Dataset     dataset.Dataset
 	Recorder    *recorder.Recorder
+	CacheSalt *config.CacheSalt // Prefix cache isolation (nil = disabled)
 	Metrics     *metrics.Metrics // Optional Prometheus metrics (nil = disabled)
 }
 
@@ -234,7 +238,7 @@ func (g *Generator) runRateBased(ctx context.Context, c *client.Client, startTim
 		var gap time.Duration
 		if poisson {
 			// Exponential inter-arrival time
-			gap = time.Duration(float64(time.Second) * (-math.Log(1-rand.Float64()) / rate))
+			gap = time.Duration(float64(time.Second) * (-math.Log(1-mathrand.Float64()) / rate))
 		} else {
 			gap = time.Duration(float64(time.Second) / rate)
 		}
@@ -336,6 +340,23 @@ func (g *Generator) runStream(ctx context.Context, c *client.Client, streamID in
 	}
 }
 
+// cacheSalt returns the cache salt for a single request.
+func (g *Generator) cacheSalt() string {
+	if g.CacheSalt == nil {
+		return ""
+	}
+	switch g.CacheSalt.Mode {
+	case "random":
+		var b [32]byte
+		rand.Read(b[:])
+		return base64.RawURLEncoding.EncodeToString(b[:])
+	case "fixed":
+		return g.CacheSalt.Value
+	default:
+		return ""
+	}
+}
+
 func (g *Generator) runCompletion(ctx context.Context, c *client.Client, streamID int, convID string, conv dataset.Conversation) {
 	req := &client.CompletionRequest{
 		Model:       g.Model,
@@ -344,6 +365,7 @@ func (g *Generator) runCompletion(ctx context.Context, c *client.Client, streamI
 		MaxTokens:   conv.MaxTokens,
 		Stop:        conv.Stop,
 		Temperature: conv.Temperature,
+		CacheSalt:   g.cacheSalt(),
 	}
 
 	result := c.CompletionStream(ctx, req)
@@ -450,6 +472,7 @@ func (g *Generator) runConversation(ctx context.Context, c *client.Client, strea
 			Messages:  messages,
 			Stream:    true,
 			MaxTokens: conv.MaxTokens,
+			CacheSalt: g.cacheSalt(),
 		}
 
 		result := c.ChatStream(ctx, req)

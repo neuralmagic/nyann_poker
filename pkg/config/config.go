@@ -61,6 +61,15 @@ type Workload struct {
 	GSM8KTrainPath string `json:"gsm8k_train_path,omitempty"` // path to GSM8K training JSONL (for few-shot examples)
 	NumFewShot     *int   `json:"num_fewshot,omitempty"`       // number of few-shot examples (default: 5, requires gsm8k_train_path)
 	CharsPerToken float64 `json:"chars_per_token"`         // override auto-calibrated ratio (0 = auto)
+	CacheSalt *CacheSalt `json:"cache_salt,omitempty"` // prefix cache isolation config
+}
+
+// CacheSalt configures vLLM prefix cache isolation.
+//   - {"mode": "random"}                    → unique 256-bit salt per request
+//   - {"mode": "fixed", "value": "abc123"}  → same salt on every request
+type CacheSalt struct {
+	Mode  string `json:"mode"`            // "random" or "fixed"
+	Value string `json:"value,omitempty"` // salt value (required when mode is "fixed")
 }
 
 // Parse reads a config from a JSON string or file path.
