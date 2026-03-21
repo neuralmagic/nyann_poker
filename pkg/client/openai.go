@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+var (
+	ssePrefix = []byte("data: ")
+	sseDone   = []byte("[DONE]")
+)
+
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -259,45 +264,30 @@ func (c *Client) ChatStream(ctx context.Context, req *Request) *Result {
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
+		line := scanner.Bytes()
+		if !bytes.HasPrefix(line, ssePrefix) {
 			continue
 		}
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "[DONE]" {
+		data := line[len(ssePrefix):]
+		if bytes.Equal(data, sseDone) {
 			break
 		}
 
 		now := time.Now()
+		f := parseSSEChunk(data, "content")
 
-		var chunk struct {
-			Choices []struct {
-				Delta struct {
-					Content string `json:"content"`
-				} `json:"delta"`
-				FinishReason *string `json:"finish_reason"`
-			} `json:"choices"`
-			Usage *Usage `json:"usage"`
-		}
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue // Skip malformed chunks
-		}
-
-		if len(chunk.Choices) > 0 {
-			if chunk.Choices[0].Delta.Content != "" {
-				if result.FirstToken.IsZero() {
-					result.FirstToken = now
-				}
-				result.TokenTimes = append(result.TokenTimes, now)
-				content.WriteString(chunk.Choices[0].Delta.Content)
+		if f.HasContent {
+			if result.FirstToken.IsZero() {
+				result.FirstToken = now
 			}
-			if chunk.Choices[0].FinishReason != nil {
-				result.FinishReason = *chunk.Choices[0].FinishReason
-			}
+			result.TokenTimes = append(result.TokenTimes, now)
+			content.WriteString(f.Content)
 		}
-
-		if chunk.Usage != nil {
-			result.Usage = chunk.Usage
+		if f.FinishReason != "" {
+			result.FinishReason = f.FinishReason
+		}
+		if f.Usage != nil {
+			result.Usage = f.Usage
 		}
 	}
 
@@ -353,43 +343,30 @@ func (c *Client) CompletionStream(ctx context.Context, req *CompletionRequest) *
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
+		line := scanner.Bytes()
+		if !bytes.HasPrefix(line, ssePrefix) {
 			continue
 		}
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "[DONE]" {
+		data := line[len(ssePrefix):]
+		if bytes.Equal(data, sseDone) {
 			break
 		}
 
 		now := time.Now()
+		f := parseSSEChunk(data, "text")
 
-		var chunk struct {
-			Choices []struct {
-				Text         string  `json:"text"`
-				FinishReason *string `json:"finish_reason"`
-			} `json:"choices"`
-			Usage *Usage `json:"usage"`
-		}
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
-		}
-
-		if len(chunk.Choices) > 0 {
-			if chunk.Choices[0].Text != "" {
-				if result.FirstToken.IsZero() {
-					result.FirstToken = now
-				}
-				result.TokenTimes = append(result.TokenTimes, now)
-				content.WriteString(chunk.Choices[0].Text)
+		if f.HasContent {
+			if result.FirstToken.IsZero() {
+				result.FirstToken = now
 			}
-			if chunk.Choices[0].FinishReason != nil {
-				result.FinishReason = *chunk.Choices[0].FinishReason
-			}
+			result.TokenTimes = append(result.TokenTimes, now)
+			content.WriteString(f.Content)
 		}
-
-		if chunk.Usage != nil {
-			result.Usage = chunk.Usage
+		if f.FinishReason != "" {
+			result.FinishReason = f.FinishReason
+		}
+		if f.Usage != nil {
+			result.Usage = f.Usage
 		}
 	}
 
