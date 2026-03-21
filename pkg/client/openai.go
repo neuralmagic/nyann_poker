@@ -18,11 +18,12 @@ type Message struct {
 }
 
 type Request struct {
-	Model     string    `json:"model"`
-	Messages  []Message `json:"messages"`
-	Stream    bool      `json:"stream"`
-	MaxTokens int       `json:"max_tokens,omitempty"`
-	CacheSalt string    `json:"cache_salt,omitempty"`
+	Model        string            `json:"model"`
+	Messages     []Message         `json:"messages"`
+	Stream       bool              `json:"stream"`
+	MaxTokens    int               `json:"max_tokens,omitempty"`
+	CacheSalt    string            `json:"cache_salt,omitempty"`
+	ExtraHeaders map[string]string `json:"-"` // Applied as HTTP headers, not serialized
 }
 
 type CompletionRequest struct {
@@ -243,6 +244,9 @@ func (c *Client) ChatStream(ctx context.Context, req *Request) *Result {
 		return result
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	for k, v := range req.ExtraHeaders {
+		httpReq.Header.Set(k, v)
+	}
 
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {
