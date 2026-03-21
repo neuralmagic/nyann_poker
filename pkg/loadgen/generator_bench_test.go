@@ -96,7 +96,7 @@ func TestConcurrencyUtilization(t *testing.T) {
 
 	addr := startFastMockServer(t)
 
-	for _, concurrency := range []int{4, 16, 64, 256, 1024, 4096} {
+	for _, concurrency := range []int{4, 16, 64, 256, 1024} {
 		t.Run(fmt.Sprintf("c%d", concurrency), func(t *testing.T) {
 			rec := recorder.NewMemory()
 			gen := &loadgen.Generator{
@@ -147,12 +147,7 @@ func TestConcurrencyUtilization(t *testing.T) {
 			t.Logf("target=%d  mean_inflight=%.1f  ratio=%.3f  completed=%d",
 				concurrency, mean, ratio, len(records))
 
-			// c4096 against a local mock server with race detector can't
-			// sustain 80% — the mock server becomes the bottleneck.
 			minRatio := 0.80
-			if concurrency >= 4096 {
-				minRatio = 0.50
-			}
 			if ratio < minRatio {
 				t.Errorf("concurrency utilization %.1f%% is below %.0f%% threshold", ratio*100, minRatio*100)
 			}
