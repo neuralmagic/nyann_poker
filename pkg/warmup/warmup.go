@@ -24,7 +24,6 @@ type AutoConfig struct {
 	MaxKernelRequests  int     // cap on kernel warmup probes (default: 10)
 	StabilityThreshold float64 // TTFT change threshold (default: 0.10)
 	StabilityWindow    int     // consecutive stable readings (default: 2)
-	SettleCycles       int     // request cycles after ramp before recording (default: 2)
 }
 
 func (c *AutoConfig) defaults() {
@@ -36,9 +35,6 @@ func (c *AutoConfig) defaults() {
 	}
 	if c.StabilityWindow <= 0 {
 		c.StabilityWindow = 2
-	}
-	if c.SettleCycles <= 0 {
-		c.SettleCycles = 2
 	}
 }
 
@@ -122,18 +118,16 @@ func ComputeStages(ctx context.Context, cfg *AutoConfig) ([]loadgen.Stage, error
 
 	// Kernels are already compiled from the probes above.
 	// Go straight to the settle stage at target concurrency.
-	// Rampup = one request lifetime (stagger streams across lifecycle)
-	// Duration = rampup + settle_cycles × request_lifetime
+	// Rampup = one request lifetime (stagger streams across lifecycle).
+	// Once all streams have started, the batch is in steady state.
 	rampup := requestLifetime
-	settleDur := rampup + time.Duration(cfg.SettleCycles)*requestLifetime
+	settleDur := rampup
 	if settleDur < 5*time.Second {
 		settleDur = 5 * time.Second
 	}
 	if settleDur > 120*time.Second {
 		settleDur = 120 * time.Second
-		if rampup > settleDur/2 {
-			rampup = settleDur / 2
-		}
+		rampup = settleDur
 	}
 
 	stages := []loadgen.Stage{
