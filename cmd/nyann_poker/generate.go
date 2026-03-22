@@ -143,41 +143,21 @@ Workload types:
 
 			var allStages []loadgen.Stage
 			if cfg.Warmup != nil {
-				if cfg.Warmup.Profile != "" {
-					// Profile-based smart warmup
-					profile, err := warmup.LoadProfile(cfg.Warmup.Profile)
-					if err != nil {
-						return fmt.Errorf("loading warmup profile: %w", err)
-					}
-					targetConcurrency := cfgStages[0].Concurrency
-					planCfg := &warmup.PlanConfig{
-						TargetConcurrency: targetConcurrency,
-						WorkloadOSL:       w.OSL,
-					}
-					warmupStageList := warmup.PlanWarmupStages(profile, planCfg)
-					allStages = append(allStages, warmupStageList...)
-					warmupStages = len(warmupStageList)
-
-					var totalWarmupDur time.Duration
-					for _, s := range warmupStageList {
-						totalWarmupDur += s.Duration
-					}
-					slog.Info("Smart warmup from profile",
-						"profile", cfg.Warmup.Profile,
-						"kernel_warmup_requests", profile.KernelWarmupRequests,
-						"stages", warmupStages,
-						"total_warmup_duration", totalWarmupDur)
-				} else {
-					// Legacy fixed-duration warmup
-					slog.Info("Running warmup",
-						"concurrency", cfg.Warmup.Concurrency,
-						"duration", cfg.Warmup.Duration.Duration())
-					allStages = append(allStages, loadgen.Stage{
-						Concurrency: cfg.Warmup.Concurrency,
-						Duration:    cfg.Warmup.Duration.Duration(),
-					})
-					warmupStages = 1
+				autoCfg := &warmup.AutoConfig{
+					Target:            target,
+					Model:             model,
+					Dataset:           ds,
+					TargetConcurrency: cfgStages[0].Concurrency,
+					WorkloadOSL:       w.OSL,
+					CacheSalt:         w.CacheSalt,
+					Rampup:            cfg.Warmup.Rampup.Duration(),
 				}
+				warmupStageList, err := warmup.ComputeStages(ctx, autoCfg)
+				if err != nil {
+					return fmt.Errorf("warmup: %w", err)
+				}
+				allStages = append(allStages, warmupStageList...)
+				warmupStages = len(warmupStageList)
 			}
 			for _, s := range cfgStages {
 				allStages = append(allStages, loadgen.Stage{

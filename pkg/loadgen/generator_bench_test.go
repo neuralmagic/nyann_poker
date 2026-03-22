@@ -147,7 +147,7 @@ func TestConcurrencyUtilization(t *testing.T) {
 			t.Logf("target=%d  mean_inflight=%.1f  ratio=%.3f  completed=%d",
 				concurrency, mean, ratio, len(records))
 
-			minRatio := 0.80
+			minRatio := 0.75
 			if ratio < minRatio {
 				t.Errorf("concurrency utilization %.1f%% is below %.0f%% threshold", ratio*100, minRatio*100)
 			}

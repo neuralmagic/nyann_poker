@@ -18,16 +18,11 @@ type Config struct {
 	Workload Workload `json:"workload"`
 }
 
-// Warmup defines a warmup stage that runs before the main benchmark.
-// Results from the warmup are discarded.
-//
-// When Profile is set, warmup uses a characterization profile for
-// data-driven warmup (ignores Concurrency/Duration).
-// Otherwise, falls back to fixed-duration warmup.
+// Warmup probes the engine and staggers stream starts across one request
+// lifetime so the batch reaches true steady state before recording.
+// If Rampup is set, probing is skipped and the value is used directly.
 type Warmup struct {
-	Profile     string   `json:"profile,omitempty"`
-	Concurrency int      `json:"concurrency,omitempty"`
-	Duration    Duration `json:"duration,omitempty"`
+	Rampup Duration `json:"rampup,omitempty"` // skip probing, use this as stagger duration
 }
 
 // Stage defines one step in a multi-stage sweep.
