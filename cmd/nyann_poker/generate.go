@@ -104,6 +104,15 @@ Workload types:
 
 			charsPerToken := calibrateTokenRatio(ctx, c, model, w.CharsPerToken)
 
+			// Also accept seed from env var (for K8s Jobs where args are static).
+			if !seedSet {
+				if v, ok := os.LookupEnv("NYANN_SEED"); ok {
+					if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+						seed = parsed
+						seedSet = true
+					}
+				}
+			}
 			if seedSet {
 				rand.Seed(seed) //nolint:staticcheck // intentional: deterministic global seed
 				slog.Info("Using fixed random seed", "seed", seed)

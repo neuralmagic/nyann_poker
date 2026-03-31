@@ -54,7 +54,7 @@ smoke-test:
 # Deploy load generation Job to Kubernetes
 # CONFIG can be a file path or inline JSON string
 # NAME allows running multiple jobs side-by-side (e.g. "eval" + "load")
-deploy NAME TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base' IMAGE_TAG='latest' LOG_LEVEL='info':
+deploy NAME TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='base' IMAGE_TAG='latest' LOG_LEVEL='info' SEED='':
     #!/usr/bin/env bash
     set -euo pipefail
     kubectl -n {{NAMESPACE}} delete job {{NAME}} --ignore-not-found=true
@@ -81,6 +81,7 @@ deploy NAME TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='b
     export IMAGE_TAG={{IMAGE_TAG}}
     export ARCH={{ARCH}}
     export LOG_LEVEL={{LOG_LEVEL}}
+    export SEED="{{SEED}}"
     kubectl kustomize "$OVERLAY_DIR" | envsubst | kubectl -n {{NAMESPACE}} apply -f -
 
 # Download a corpus and convert to flat text on Lustre
