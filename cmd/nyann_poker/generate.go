@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,12 +27,14 @@ import (
 
 func generateCmd() *cobra.Command {
 	var (
-		target     string
-		model      string
-		cfgInput   string
-		outputDir  string
-		workerID   int
+		target      string
+		model       string
+		cfgInput    string
+		outputDir   string
+		workerID    int
 		metricsAddr string
+		seed        int64
+		seedSet     bool
 	)
 
 	cmd := &cobra.Command{
@@ -100,6 +103,11 @@ Workload types:
 			}
 
 			charsPerToken := calibrateTokenRatio(ctx, c, model, w.CharsPerToken)
+
+			if seedSet {
+				rand.Seed(seed) //nolint:staticcheck // intentional: deterministic global seed
+				slog.Info("Using fixed random seed", "seed", seed)
+			}
 
 			ds, err := buildDataset(&w, charsPerToken)
 			if err != nil {
@@ -289,6 +297,11 @@ Workload types:
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory for JSONL + timestamp files (omit for stdout-only)")
 	cmd.Flags().IntVar(&workerID, "worker-id", 0, "Worker identifier (for multi-container runs)")
 	cmd.Flags().StringVar(&metricsAddr, "metrics", "", "Prometheus metrics listen address (e.g. :9090)")
+	cmd.Flags().Int64Var(&seed, "seed", 0, "Fixed random seed for deterministic datasets (all pods send same data)")
+	// Track whether --seed was explicitly passed so seed=0 is distinguishable from unset.
+	cmd.PreRun = func(cmd *cobra.Command, args []string) {
+		seedSet = cmd.Flags().Changed("seed")
+	}
 
 	return cmd
 }
