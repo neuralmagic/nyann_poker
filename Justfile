@@ -162,10 +162,11 @@ prep-gsm8k OUTPUT_DIR NAMESPACE='vllm':
 collect NAME NAMESPACE='vllm':
     #!/usr/bin/env bash
     set -euo pipefail
-    for POD in $(kubectl -n {{NAMESPACE}} get pods -l app={{NAME}} -o jsonpath='{.items[*].metadata.name}'); do
-      echo "--- $POD ---"
-      kubectl -n {{NAMESPACE}} logs "$POD" -c nyann-poker
+    PODS=$(kubectl -n {{NAMESPACE}} get pods -l app={{NAME}} -o jsonpath='{.items[*].metadata.name}')
+    for POD in $PODS; do
+      ( echo "--- $POD ---"; kubectl -n {{NAMESPACE}} logs "$POD" -c nyann-poker ) &
     done
+    wait
 
 # Tail logs from running Job
 logs NAME NAMESPACE='vllm':
@@ -174,7 +175,7 @@ logs NAME NAMESPACE='vllm':
 # Query Prometheus for per-stage metrics from a completed benchmark run
 # PORT-FORWARD first: kubectl -n monitoring port-forward svc/prometheus 9090:9090
 # Pulls timestamps from K8s pod logs by default; pass TIMESTAMPS=path for offline use
-query-prometheus CLIENT_JOB DEPLOYMENT='' NAMESPACE='vllm' PROMETHEUS_URL='http://localhost:9090' TIMESTAMPS='':
+query-prometheus CLIENT_JOB DEPLOYMENT='' NAMESPACE='vllm' PROMETHEUS_URL='http://localhost:9090' TIMESTAMPS='' EVAL_JOB='':
     #!/usr/bin/env bash
     set -euo pipefail
     ARGS=(--prometheus-url {{PROMETHEUS_URL}} --client-job {{CLIENT_JOB}} -n {{NAMESPACE}})
@@ -183,6 +184,9 @@ query-prometheus CLIENT_JOB DEPLOYMENT='' NAMESPACE='vllm' PROMETHEUS_URL='http:
     fi
     if [[ -n "{{TIMESTAMPS}}" ]]; then
       ARGS+=(--timestamps {{TIMESTAMPS}})
+    fi
+    if [[ -n "{{EVAL_JOB}}" ]]; then
+      ARGS+=(--eval-job {{EVAL_JOB}})
     fi
     python3 scripts/query_prometheus.py "${ARGS[@]}"
 

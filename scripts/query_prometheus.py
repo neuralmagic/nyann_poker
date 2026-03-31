@@ -28,6 +28,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # ---------------------------------------------------------------------------
@@ -76,26 +77,30 @@ def get_stages_from_k8s(client_job: str, namespace: str) -> list[dict]:
 
     print(f"Found {len(pods)} pods for {client_job}", file=sys.stderr)
 
-    # Collect per-pod stage timestamps
-    all_pod_stages: list[list[dict]] = []
-    for pod in pods:
+    # Collect per-pod stage timestamps in parallel
+    def fetch_pod_stages(pod):
         log_result = subprocess.run(
             ["kubectl", "-n", namespace, "logs", pod, "-c", "nyann-poker"],
             capture_output=True, text=True,
         )
         if log_result.returncode != 0:
-            print(f"  warning: failed to get logs from {pod}", file=sys.stderr)
-            continue
-
+            return pod, None, "failed to get logs"
         summary = extract_json_from_log(log_result.stdout)
         if summary is None:
-            print(f"  warning: no JSON found in logs for {pod}", file=sys.stderr)
-            continue
-
+            return pod, None, "no JSON found in logs"
         stages = extract_stages(summary)
-        if stages:
-            all_pod_stages.append(stages)
-            print(f"  {pod}: {len(stages)} stages", file=sys.stderr)
+        return pod, stages, None
+
+    all_pod_stages: list[list[dict]] = []
+    with ThreadPoolExecutor(max_workers=len(pods)) as pool:
+        futures = {pool.submit(fetch_pod_stages, pod): pod for pod in pods}
+        for future in as_completed(futures):
+            pod, stages, err = future.result()
+            if err:
+                print(f"  warning: {err} for {pod}", file=sys.stderr)
+            elif stages:
+                all_pod_stages.append(stages)
+                print(f"  {pod}: {len(stages)} stages", file=sys.stderr)
 
     if not all_pod_stages:
         print("error: could not extract stages from any pod", file=sys.stderr)
@@ -187,8 +192,9 @@ def query_stage(
     stage: dict,
     client_job: str,
     deployment: str | None,
+    eval_job: str | None = None,
 ) -> dict:
-    """Run all metric queries for a single stage."""
+    """Run all metric queries for a single stage in parallel."""
     end_time = stage["end_time"]
     duration_s = stage["end_time"] - stage["start_time"]
     rng = format_prom_duration(duration_s)
@@ -198,36 +204,51 @@ def query_stage(
         "concurrency": stage["concurrency"],
     }
 
+    # Build all queries up front
+    queries: dict[str, str] = {}
+
     # --- Server-side metrics (vLLM) ---
     if deployment:
         pod_filter = f'pod=~"{deployment}-.*"'
-
-        q = f"avg(vllm:num_requests_running{{{pod_filter}}})"
-        result["running_requests"] = prom_query(base_url, q, end_time)
-
-        q = f'avg(vllm:num_requests_waiting{{job="vllm-prefill",{pod_filter}}})'
-        result["waiting_requests"] = prom_query(base_url, q, end_time)
-
-        q = f'sum(rate(vllm:generation_tokens_total{{job="vllm-decode",{pod_filter}}}[{rng}]))'
-        result["tgtt"] = prom_query(base_url, q, end_time)
+        queries["running_requests"] = f"avg(vllm:num_requests_running{{{pod_filter}}})"
+        queries["waiting_requests"] = f'avg(vllm:num_requests_waiting{{job="vllm-prefill",{pod_filter}}})'
+        queries["tgtt"] = f'sum(rate(vllm:generation_tokens_total{{job="vllm-decode",{pod_filter}}}[{rng}]))'
 
     # --- Client-side metrics (nyann) ---
-    client_filter = f'app="{client_job}"'
-
+    client_filter = f'pod=~"{client_job}-.*"'
     for name, metric in [("ttft", "nyann_ttft_seconds_bucket"), ("itl", "nyann_itl_seconds_bucket")]:
         for pct, q_val in [("p50", 0.50), ("p95", 0.95), ("p99", 0.99)]:
-            q = f"histogram_quantile({q_val}, sum(rate({metric}{{{client_filter}}}[{rng}])) by (le))"
-            val = prom_query(base_url, q, end_time)
-            # Convert seconds to milliseconds
-            if val is not None:
-                val = val * 1000
-            result[f"{name}_{pct}"] = val
+            queries[f"{name}_{pct}"] = (
+                f"histogram_quantile({q_val}, sum(rate({metric}{{{client_filter}}}[{rng}])) by (le))"
+            )
 
-    # --- Eval accuracy ---
-    q_correct = f"sum(rate(nyann_eval_correct{{{client_filter}}}[{rng}]))"
-    q_total = f"sum(rate(nyann_eval_total{{{client_filter}}}[{rng}]))"
-    correct = prom_query(base_url, q_correct, end_time)
-    total = prom_query(base_url, q_total, end_time)
+    # --- Eval accuracy (may come from a separate eval job) ---
+    eval_filter = f'pod=~"{eval_job}-.*"' if eval_job else client_filter
+    queries["_eval_correct"] = f"sum(rate(nyann_eval_correct{{{eval_filter}}}[{rng}]))"
+    queries["_eval_total"] = f"sum(rate(nyann_eval_total{{{eval_filter}}}[{rng}]))"
+
+    # Execute all queries in parallel
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        futures = {
+            pool.submit(prom_query, base_url, q, end_time): key
+            for key, q in queries.items()
+        }
+        raw: dict[str, float | None] = {}
+        for future in as_completed(futures):
+            key = futures[future]
+            raw[key] = future.result()
+
+    # Populate result, converting latency seconds → milliseconds
+    for key, val in raw.items():
+        if key.startswith("_eval"):
+            continue
+        if ("ttft" in key or "itl" in key) and val is not None:
+            val = val * 1000
+        result[key] = val
+
+    # Eval accuracy
+    correct = raw.get("_eval_correct")
+    total = raw.get("_eval_total")
     if correct is not None and total is not None and total > 0:
         result["eval_accuracy"] = correct / total
     else:
@@ -249,8 +270,8 @@ def fmt(val, precision=1):
     return str(val)
 
 
-def print_table(rows: list[dict], deployment: str | None):
-    """Print results as a tab-separated table."""
+def get_columns(rows: list[dict], deployment: str | None) -> list[tuple[str, str, int]]:
+    """Return the column definitions for the output table."""
     columns = [
         ("Stage", "stage", 0),
         ("Concurrency", "concurrency", 0),
@@ -275,15 +296,15 @@ def print_table(rows: list[dict], deployment: str | None):
     if has_eval:
         columns.append(("Eval Acc", "eval_accuracy", 3))
 
-    # Header
-    print("\t".join(c[0] for c in columns))
+    return columns
 
-    # Rows
+
+def print_csv(rows: list[dict], deployment: str | None):
+    """Print results as CSV (copy-paste into Google Sheets)."""
+    columns = get_columns(rows, deployment)
+    print(",".join(c[0] for c in columns))
     for row in rows:
-        cells = []
-        for _, key, prec in columns:
-            cells.append(fmt(row.get(key), prec))
-        print("\t".join(cells))
+        print(",".join(fmt(row.get(key), prec) for _, key, prec in columns))
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +336,11 @@ def main():
         help="vLLM deployment name for server-side metrics (pod name prefix)",
     )
     parser.add_argument(
+        "--eval-job",
+        default=None,
+        help="Separate K8s Job name for eval metrics (e.g. poker-eval). Defaults to --client-job.",
+    )
+    parser.add_argument(
         "--timestamps",
         default=None,
         help="Path to a JSON file (summary or timestamps) instead of fetching from K8s",
@@ -323,7 +349,7 @@ def main():
         "--json",
         action="store_true",
         dest="json_output",
-        help="Output as JSON instead of table",
+        help="Output as JSON instead of CSV",
     )
     args = parser.parse_args()
 
@@ -343,7 +369,6 @@ def main():
         file=sys.stderr,
     )
 
-    rows = []
     for stage in stages:
         duration = stage["end_time"] - stage["start_time"]
         print(
@@ -351,13 +376,23 @@ def main():
             f"duration={duration:.0f}s",
             file=sys.stderr,
         )
-        row = query_stage(args.prometheus_url, stage, args.client_job, args.deployment)
-        rows.append(row)
+
+    with ThreadPoolExecutor(max_workers=len(stages)) as pool:
+        futures = {
+            pool.submit(query_stage, args.prometheus_url, stage, args.client_job, args.deployment, args.eval_job): stage["stage"]
+            for stage in stages
+        }
+        results_by_stage: dict[int, dict] = {}
+        for future in as_completed(futures):
+            stage_idx = futures[future]
+            results_by_stage[stage_idx] = future.result()
+
+    rows = [results_by_stage[s["stage"]] for s in stages]
 
     if args.json_output:
         print(json.dumps(rows, indent=2))
     else:
-        print_table(rows, args.deployment)
+        print_csv(rows, args.deployment)
 
 
 if __name__ == "__main__":
