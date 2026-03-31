@@ -81,8 +81,18 @@ deploy NAME TARGET CONFIG N_WORKERS='4' NAMESPACE='vllm' ARCH='arm64' OVERLAY='b
     export IMAGE_TAG={{IMAGE_TAG}}
     export ARCH={{ARCH}}
     export LOG_LEVEL={{LOG_LEVEL}}
-    export SEED="{{SEED}}"
-    kubectl kustomize "$OVERLAY_DIR" | envsubst | kubectl -n {{NAMESPACE}} apply -f -
+    YAML=$(kubectl kustomize "$OVERLAY_DIR" | envsubst)
+    # Inject NYANN_SEED env var after envsubst to avoid kustomize stripping quotes
+    # (bare 42 is a YAML number, but env.value must be a string)
+    if [[ -n "{{SEED}}" ]]; then
+      YAML=$(echo "$YAML" | sed '/name: nyann-poker/,/args:/{
+        /args:/i\
+\          env:\
+\            - name: NYANN_SEED\
+\              value: "{{SEED}}"
+      }')
+    fi
+    echo "$YAML" | kubectl -n {{NAMESPACE}} apply -f -
 
 # Download a corpus and convert to flat text on Lustre
 # Sources: sharegpt

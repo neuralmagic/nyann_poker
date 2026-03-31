@@ -52,9 +52,6 @@ spec:
             - name: metrics
               containerPort: 9090
               protocol: TCP
-          env:
-            - name: NYANN_SEED
-              value: "${SEED}"
           args:
             - --log-level
             - ${LOG_LEVEL}
