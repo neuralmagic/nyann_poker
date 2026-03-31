@@ -171,6 +171,21 @@ collect NAME NAMESPACE='vllm':
 logs NAME NAMESPACE='vllm':
     kubectl -n {{NAMESPACE}} logs -l app={{NAME}} -c nyann-poker --tail=50 -f
 
+# Query Prometheus for per-stage metrics from a completed benchmark run
+# PORT-FORWARD first: kubectl -n monitoring port-forward svc/prometheus 9090:9090
+# Pulls timestamps from K8s pod logs by default; pass TIMESTAMPS=path for offline use
+query-prometheus CLIENT_JOB DEPLOYMENT='' NAMESPACE='vllm' PROMETHEUS_URL='http://localhost:9090' TIMESTAMPS='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ARGS=(--prometheus-url {{PROMETHEUS_URL}} --client-job {{CLIENT_JOB}} -n {{NAMESPACE}})
+    if [[ -n "{{DEPLOYMENT}}" ]]; then
+      ARGS+=(--deployment {{DEPLOYMENT}})
+    fi
+    if [[ -n "{{TIMESTAMPS}}" ]]; then
+      ARGS+=(--timestamps {{TIMESTAMPS}})
+    fi
+    python3 scripts/query_prometheus.py "${ARGS[@]}"
+
 clean:
     rm -f nyann_poker nyann_poker-linux-amd64 nyann_poker-linux-arm64
     rm -rf /tmp/nyann_poker_*

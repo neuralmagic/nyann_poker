@@ -129,13 +129,22 @@ func (r *Recorder) Close() error {
 	return nil
 }
 
+// StageTimestamp marks the measurement window for a single stage.
+type StageTimestamp struct {
+	Stage       int     `json:"stage"`       // 0-based index (main stages only)
+	Concurrency int     `json:"concurrency"` // concurrency level for this stage
+	StartTime   float64 `json:"start_time"`  // unix epoch seconds
+	EndTime     float64 `json:"end_time"`    // unix epoch seconds
+}
+
 // Timestamps holds phase timestamps for a single worker.
 type Timestamps struct {
-	StartTime      float64 `json:"start_time"`
-	RampupEndTime  float64 `json:"rampup_end_time"`
-	EndTime        float64 `json:"end_time"`
-	RampupSeconds  float64 `json:"rampup_duration_seconds"`
-	TotalSeconds   float64 `json:"total_duration_seconds"`
+	StartTime      float64          `json:"start_time"`
+	RampupEndTime  float64          `json:"rampup_end_time"`
+	EndTime        float64          `json:"end_time"`
+	RampupSeconds  float64          `json:"rampup_duration_seconds"`
+	TotalSeconds   float64          `json:"total_duration_seconds"`
+	Stages         []StageTimestamp  `json:"stages,omitempty"`
 }
 
 func (t *Timestamps) Write(path string) error {

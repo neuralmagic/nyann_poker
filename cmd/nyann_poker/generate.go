@@ -181,12 +181,18 @@ Workload types:
 			}
 
 			var startTime time.Time
+			var stageTimestamps []recorder.StageTimestamp
+			var lastStageStart time.Time
+			var lastConcurrency int
+
 			gen.RunStages(ctx, allStages, func(i, concurrency int) {
 				if i < warmupStages {
 					slog.Info("Warmup running", "concurrency", concurrency)
 					return
 				}
 				mainIdx := i - warmupStages
+				now := time.Now()
+
 				if mainIdx == 0 {
 					// Transition from warmup to main: swap recorder
 					if cfg.Warmup != nil {
@@ -194,8 +200,24 @@ Workload types:
 						slog.Info("Warmup complete",
 							"requests", len(warmupRec.Records()))
 					}
-					startTime = time.Now()
+					startTime = now
+				} else {
+					// Close out the previous stage
+					stageTimestamps = append(stageTimestamps, recorder.StageTimestamp{
+						Stage:       mainIdx - 1,
+						Concurrency: lastConcurrency,
+						StartTime:   recorder.TimeToFloat(lastStageStart),
+						EndTime:     recorder.TimeToFloat(now),
+					})
+					slog.Info("Stage complete",
+						"stage", fmt.Sprintf("%d/%d", mainIdx, len(cfgStages)),
+						"concurrency", lastConcurrency,
+						"duration", now.Sub(lastStageStart))
 				}
+
+				lastStageStart = now
+				lastConcurrency = concurrency
+
 				slog.Info("Stage started",
 					"stage", fmt.Sprintf("%d/%d", mainIdx+1, len(cfgStages)),
 					"concurrency", concurrency,
@@ -206,12 +228,28 @@ Workload types:
 			})
 
 			endTime := time.Now()
+
+			// Close out the final stage
+			if !lastStageStart.IsZero() {
+				stageTimestamps = append(stageTimestamps, recorder.StageTimestamp{
+					Stage:       len(stageTimestamps),
+					Concurrency: lastConcurrency,
+					StartTime:   recorder.TimeToFloat(lastStageStart),
+					EndTime:     recorder.TimeToFloat(endTime),
+				})
+				slog.Info("Stage complete",
+					"stage", fmt.Sprintf("%d/%d", len(stageTimestamps), len(cfgStages)),
+					"concurrency", lastConcurrency,
+					"duration", endTime.Sub(lastStageStart))
+			}
+
 			timestamps := &recorder.Timestamps{
 				StartTime:     recorder.TimeToFloat(startTime),
 				RampupEndTime: recorder.TimeToFloat(startTime.Add(cfg.Load.Rampup.Duration())),
 				EndTime:       recorder.TimeToFloat(endTime),
 				RampupSeconds: cfg.Load.Rampup.Duration().Seconds(),
 				TotalSeconds:  endTime.Sub(startTime).Seconds(),
+				Stages:        stageTimestamps,
 			}
 
 			// Write files to disk if output-dir is set
