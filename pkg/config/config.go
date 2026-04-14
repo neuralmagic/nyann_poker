@@ -73,11 +73,28 @@ type CacheSalt struct {
 	Value string `json:"value,omitempty"` // salt value (required when mode is "fixed")
 }
 
-// Parse reads a config from a JSON string or file path.
-func Parse(input string) (*Config, error) {
+// Parse reads a config from a JSON string, JSON file path, or Starlark (.star)
+// file path and returns a ScenarioConfig.
+func Parse(input string) (*ScenarioConfig, error) {
+	input = strings.TrimSpace(input)
+
+	// Starlark files
+	if strings.HasSuffix(input, ".star") {
+		return ParseStarlark(input)
+	}
+
+	// JSON (inline or file)
+	cfg, err := parseJSON(input)
+	if err != nil {
+		return nil, err
+	}
+	return cfg.ToScenarioConfig(), nil
+}
+
+// parseJSON reads a config from a JSON string or file path.
+func parseJSON(input string) (*Config, error) {
 	var data []byte
 
-	input = strings.TrimSpace(input)
 	if strings.HasPrefix(input, "{") {
 		data = []byte(input)
 	} else {
