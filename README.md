@@ -24,16 +24,16 @@ At high concurrency, nyann-bench sustains up to **10x more requests per second**
 
 The container image is **~5 MB** (single static binary on `scratch`) — no Python runtime, no pip dependencies, no conda environment. It deploys as a Kubernetes [indexed Job](https://kubernetes.io/docs/concepts/workloads/controllers/job/#completion-mode) for horizontal scale-out across multiple pods. Pod-level network tuning (expanded ephemeral port range, `TCP_TW_REUSE`) is built into the Job template.
 
+### Streaming eval
+
+Run GSM8K (or other evals) under load to see accuracy in real time via Prometheus. Watch your inference server's gsm8k score slowly fall as its KV cache gets poisoned with NaNs.
+
 ### Prometheus integration
 
 Two-sided observability out of the box:
 
 - **Client-side metrics** — each pod exposes a `/metrics` endpoint with histograms for TTFT, ITL, E2E latency, and token counts, ready for Prometheus scraping.
 - **Server-side correlation** — per-stage timestamps make it easy to query your server's Prometheus for the exact window of each benchmark phase (see `just query-prometheus`).
-
-### Streaming eval
-
-Run GSM8K (or other evals) under load and watch accuracy in real time via Prometheus. Watch your inference server's gsm8k score slowly fall as its KV cache gets poisoned with NaNs.
 
 ### Flexible workload definition
 
@@ -60,8 +60,6 @@ scenario(
     workload = workload("synthetic", isl=512, osl=1024),
 )
 ```
-
-JSON configs are also supported.
 
 ### Multi-turn conversations
 
