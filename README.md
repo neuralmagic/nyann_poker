@@ -6,11 +6,11 @@ A high-performance LLM inference benchmarking tool designed for Kubernetes-scale
 
 ## Why nyann-bench?
 
-`nyann-bench` was ~~vibe-coded~~ developed via agantic engineering in support of vLLM's GB200 NVL72 WideEP development, in order to address a series of challenges we ran into at scale.
+`nyann-bench` was ~~vibe-coded~~ created via agentic engineering in support of vLLM's GB200 NVL72 WideEP bring-up, in order to address a series of challenges we ran into at scale.
 
 1. In order to sustain a high number of concurrent requests, a benchmarking tool needs to support scale-out and a high request rate at high concurrency.
 2. Observability becomes more important at scale. Client-side benchmarking metrics make it easy to see what all benchmarking pods are doing at a glance.
-3. Streaming evals helped us detect and debug numerical issues that would gradually degrade the accuracy of NVFP4 models over the lifetime of the server -- rare events that would only happen at scale.
+3. Streaming evals helped us detect and debug numerical issues that would gradually degrade the accuracy of NVFP4 models over the lifetime of the server — rare events that would only happen at scale.
 4. Tools like `vllm bench`, `guide-llm` or `lm-eval` that have heavy dependencies like PyTorch are too slow to update or deploy. `nyann-bench` is only 5MB compressed.
 
 ### Pretty Fast
@@ -33,7 +33,7 @@ The container image is **~5 MB** (single static binary on `scratch`) — no Pyth
 
 ### Streaming eval
 
-Run GSM8K (or other evals) under load to see accuracy in real time via Prometheus. Watch your inference server's gsm8k score slowly fall as its KV cache gets poisoned with NaNs.
+Run GSM8K (or other evals) under load to see accuracy in real time via Prometheus. Watch your inference server's GSM8K score slowly fall as its KV cache gets poisoned with NaNs.
 
 ### Prometheus integration
 
@@ -130,7 +130,7 @@ Each worker produces:
 - **`requests_N.jsonl`** — one line per completed request with TTFT, per-token ITL array, token counts, latency, eval results, and finish reason.
 - **`timestamps_N.json`** — start/end times for each stage, for Prometheus range queries.
 
-Merging across workers: `cat requests_*.jsonl | sort -t'"' -k4`.
+Merging across workers: `cat requests_*.jsonl`.
 
 ## Kubernetes deployment
 
