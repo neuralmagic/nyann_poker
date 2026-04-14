@@ -6,7 +6,14 @@ A high-performance LLM inference benchmarking tool designed for Kubernetes-scale
 
 ## Why nyann-bench?
 
-### Fast
+`nyann-bench` was ~vibe-coded~ developed via agantic engineering in support of vLLM GB200 NVL72 WideEP, to address a series of challenges we ran into at scale.
+
+1. In order to sustain a high number of concurrent requests, a benchmarking tool needs to support scale-out, and the faster the tool is, the easier this becomes.
+2. Observability becomes more important at scale. A benchmarking tool that reports metrics makes it much easier to see what all benchmarking pods are doing at a glance.
+3. Streaming evals helped us detect and debug numerical issues that would gradually degrade the accuracy of NVFP4 models over the lifetime of the server -- rare events that would only happen at scale.
+4. Tools like `vllm bench`, `guide-llm` or `lm-eval` that have heavy dependencies like PyTorch are too slow to update or deploy. `nyann-bench` is only 5MB compressed.
+
+### Pretty Fast
 
 At high concurrency, nyann-bench sustains up to **10x more requests per second** than Python-based alternatives. Go's goroutine model and tuned HTTP transport eliminate the client as the bottleneck, so you're measuring the server, not your benchmark harness.
 
@@ -18,7 +25,7 @@ At high concurrency, nyann-bench sustains up to **10x more requests per second**
 | 1024        | 15,065 req/s | 1,207 req/s | 2,120 req/s |
 | 4096        | **17,889 req/s** | 1,306 req/s | 1,799 req/s |
 
-<sup>Measured against the built-in mock server on a Linux x86_64 machine (H100 node), 30s per data point. See [bench_compare/](bench_compare/) for methodology and reproduction steps.</sup>
+<sup>Measured against the built-in mock server on a Linux x86_64 machine, 30s per data point. See [bench_compare/](bench_compare/) for methodology and reproduction steps.</sup>
 
 ### Kubernetes-native
 
