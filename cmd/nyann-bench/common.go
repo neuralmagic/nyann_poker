@@ -73,14 +73,7 @@ func buildDataset(w *config.Workload, charsPerToken float64) (dataset.Dataset, e
 		if numFewShot > 0 && w.GSM8KTrainPath == "" {
 			return nil, fmt.Errorf("workload.gsm8k_train_path is required when num_fewshot > 0")
 		}
-		gsm8k, err := dataset.NewGSM8K(w.GSM8KPath, w.GSM8KTrainPath, numFewShot)
-		if err != nil {
-			return nil, err
-		}
-		if w.NumWorkers > 1 {
-			gsm8k.Partition(w.WorkerID, w.NumWorkers)
-		}
-		return gsm8k, nil
+		return dataset.NewGSM8K(w.GSM8KPath, w.GSM8KTrainPath, numFewShot)
 	default:
 		return nil, fmt.Errorf("unknown workload type: %s (options: synthetic, faker, corpus, gsm8k)", w.Type)
 	}
@@ -93,6 +86,7 @@ type scenarioOpts struct {
 	OutputDir   string
 	WorkerID    int
 	MetricsAddr string
+	Dataset     dataset.Dataset // pre-built dataset (skips buildDataset for default workload)
 }
 
 // runScenario executes a benchmark scenario and returns the summary.
@@ -129,13 +123,18 @@ func runScenario(ctx context.Context, cancel context.CancelFunc, opts scenarioOp
 
 	charsPerToken := calibrateTokenRatio(ctx, c, model, w.CharsPerToken)
 
-	ds, err := buildDataset(&w, charsPerToken)
-	if err != nil {
-		return nil, err
+	ds := opts.Dataset
+	if ds == nil {
+		var err error
+		ds, err = buildDataset(&w, charsPerToken)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Build recorder
 	var rec *recorder.Recorder
+	var err error
 	if opts.OutputDir != "" {
 		rec, err = recorder.New(opts.OutputDir, opts.WorkerID)
 		if err != nil {

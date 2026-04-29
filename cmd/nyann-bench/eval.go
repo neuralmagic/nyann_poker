@@ -95,16 +95,16 @@ Example:
 				return fmt.Errorf("--worker-id %d must be < --num-workers %d", workerID, numWorkers)
 			}
 
-			// Count items and compute this worker's partition size
-			totalItems, err := dataset.CountGSM8KItems(gsm8kPath)
+			// Build dataset and partition for this worker
+			gsm8kDS, err := dataset.NewGSM8K(gsm8kPath, gsm8kTrainPath, numFewShot)
 			if err != nil {
-				return fmt.Errorf("counting GSM8K items: %w", err)
+				return fmt.Errorf("loading GSM8K dataset: %w", err)
 			}
-
-			partitionItems := totalItems
+			totalItems := gsm8kDS.Len()
 			if numWorkers > 1 {
-				partitionItems = dataset.PartitionSize(totalItems, workerID, numWorkers)
+				gsm8kDS.Partition(workerID, numWorkers)
 			}
+			partitionItems := gsm8kDS.Len()
 
 			slog.Info("GSM8K eval configured",
 				"total_items", totalItems,
@@ -123,8 +123,6 @@ Example:
 					GSM8KPath:      gsm8kPath,
 					GSM8KTrainPath: gsm8kTrainPath,
 					NumFewShot:     &numFewShot,
-					WorkerID:       workerID,
-					NumWorkers:     numWorkers,
 				},
 				Stages: []config.ScenarioStage{{
 					Name:        "gsm8k-eval",
@@ -142,6 +140,7 @@ Example:
 				OutputDir:   outputDir,
 				WorkerID:    workerID,
 				MetricsAddr: metricsAddr,
+				Dataset:     gsm8kDS,
 			})
 			if err != nil {
 				return err

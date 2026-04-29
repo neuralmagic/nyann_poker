@@ -79,6 +79,13 @@ func (g *GSM8K) Len() int {
 // produces the same ordering. Items are divided into contiguous chunks;
 // the first (total % numWorkers) workers each get one extra item.
 func (g *GSM8K) Partition(workerID, numWorkers int) {
+	if numWorkers <= 0 {
+		panic("Partition: numWorkers must be > 0")
+	}
+	if workerID < 0 || workerID >= numWorkers {
+		panic(fmt.Sprintf("Partition: workerID %d out of range [0, %d)", workerID, numWorkers))
+	}
+
 	n := len(g.items)
 	base := n / numWorkers
 	remainder := n % numWorkers
