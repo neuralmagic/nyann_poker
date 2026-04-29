@@ -56,6 +56,11 @@ type Generator struct {
 	inFlight    atomic.Int64
 	evalCount   atomic.Int64
 	evalCorrect atomic.Int64
+
+	maxRequests  int64
+	requestCount atomic.Int64
+	requestsDone chan struct{}
+	requestsOnce sync.Once
 }
 
 // streamPool manages a resizable pool of concurrent streams.
@@ -146,6 +151,7 @@ type Stage struct {
 	Concurrency  int
 	Duration     time.Duration
 	Rampup       time.Duration // stagger new stream starts over this duration
+	MaxRequests  int           // stop after this many requests (0 = unlimited)
 	Barrier      bool          // sync point — pool stays alive (unless BarrierDrain), onBarrier fires
 	BarrierDrain bool          // stop pool before sync, fresh pool after
 }
@@ -176,14 +182,31 @@ func (g *Generator) RunStages(ctx context.Context, stages []Stage, onStage func(
 			}
 			continue
 		}
+
+		g.maxRequests = int64(stage.MaxRequests)
+		g.requestCount.Store(0)
+		g.requestsDone = make(chan struct{})
+		g.requestsOnce = sync.Once{}
 		if onStage != nil {
 			onStage(i, stage.Concurrency)
 		}
 		pool.Resize(ctx, stage.Concurrency, stage.Rampup)
 
-		select {
-		case <-ctx.Done():
-		case <-time.After(stage.Duration):
+		if stage.MaxRequests > 0 {
+			select {
+			case <-ctx.Done():
+			case <-time.After(stage.Duration):
+				slog.Warn("Stage timed out before all requests completed",
+					"completed", g.requestCount.Load(),
+					"target", stage.MaxRequests)
+			case <-g.requestsDone:
+				pool.Wait()
+			}
+		} else {
+			select {
+			case <-ctx.Done():
+			case <-time.After(stage.Duration):
+			}
 		}
 	}
 
@@ -368,6 +391,14 @@ func (g *Generator) runStream(ctx context.Context, c *client.Client, streamID in
 		case p = <-prefetch:
 		case <-ctx.Done():
 			return
+		}
+
+		if g.maxRequests > 0 {
+			n := g.requestCount.Add(1)
+			if n > g.maxRequests {
+				g.requestsOnce.Do(func() { close(g.requestsDone) })
+				return
+			}
 		}
 
 		// Start prefetching the next conversation while this request runs

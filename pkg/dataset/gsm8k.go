@@ -69,6 +69,10 @@ func NewGSM8K(testPath string, trainPath string, numFewShot int) (*GSM8K, error)
 	return &GSM8K{items: items, fewShot: fewShot, nShot: numFewShot}, nil
 }
 
+func (g *GSM8K) Len() int {
+	return len(g.items)
+}
+
 func (g *GSM8K) NextConversation() Conversation {
 	idx := g.idx.Add(1) - 1
 	item := g.items[idx%uint64(len(g.items))]
