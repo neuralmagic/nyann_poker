@@ -20,8 +20,9 @@ import (
 //   - Idavidrein/gpqa: separate "Correct Answer" and "Incorrect Answer 1/2/3" fields
 //   - fingertap/GPQA-Diamond: choices inline in question, answer is a bare letter in "answer"
 type GPQA struct {
-	items []gpqaItem
-	idx   atomic.Uint64
+	items     []gpqaItem
+	idx       atomic.Uint64
+	maxTokens int
 }
 
 type gpqaItem struct {
@@ -33,7 +34,8 @@ type gpqaItem struct {
 }
 
 // NewGPQA creates a GPQA dataset from a JSONL or JSON file.
-func NewGPQA(path string) (*GPQA, error) {
+// maxTokens controls the max output tokens per request (0 = default 16384).
+func NewGPQA(path string, maxTokens int) (*GPQA, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading gpqa file %s: %w", path, err)
@@ -52,7 +54,10 @@ func NewGPQA(path string) (*GPQA, error) {
 	rng := rand.New(rand.NewSource(42))
 	rng.Shuffle(len(items), func(i, j int) { items[i], items[j] = items[j], items[i] })
 
-	return &GPQA{items: items}, nil
+	if maxTokens <= 0 {
+		maxTokens = 16384
+	}
+	return &GPQA{items: items, maxTokens: maxTokens}, nil
 }
 
 func (g *GPQA) Len() int {
@@ -104,7 +109,7 @@ func (g *GPQA) NextConversation() Conversation {
 		Turns: [][]client.Message{
 			{{Role: "user", Content: prompt}},
 		},
-		MaxTokens:      1024,
+		MaxTokens:      g.maxTokens,
 		Temperature:    &greedy,
 		ExpectedAnswer: item.Answer,
 	}

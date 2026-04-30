@@ -191,6 +191,7 @@ func evalGPQACmd() *cobra.Command {
 		metricsAddr string
 		workerID    int
 		numWorkers  int
+		maxTokens   int
 	)
 
 	cmd := &cobra.Command{
@@ -243,7 +244,7 @@ Example:
 				return fmt.Errorf("--worker-id %d must be < --num-workers %d", workerID, numWorkers)
 			}
 
-			gpqaDS, err := dataset.NewGPQA(gpqaPath)
+			gpqaDS, err := dataset.NewGPQA(gpqaPath, maxTokens)
 			if err != nil {
 				return fmt.Errorf("loading GPQA dataset: %w", err)
 			}
@@ -314,6 +315,7 @@ Example:
 	cmd.Flags().StringVar(&metricsAddr, "metrics", "", "Prometheus metrics listen address (e.g. :9090)")
 	cmd.Flags().IntVar(&workerID, "worker-id", 0, "Worker index for dataset partitioning (auto-detected from LWS_WORKER_INDEX)")
 	cmd.Flags().IntVar(&numWorkers, "num-workers", 1, "Total number of workers for dataset partitioning")
+	cmd.Flags().IntVar(&maxTokens, "max-tokens", 0, "Max output tokens per request (0 = default 16384, increase for reasoning models)")
 
 	cmd.MarkFlagRequired("target")
 	cmd.MarkFlagRequired("gpqa-path")

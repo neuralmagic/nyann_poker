@@ -28,7 +28,7 @@ func TestGPQAFromJSONL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ds, err := dataset.NewGPQA(path)
+	ds, err := dataset.NewGPQA(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,8 +51,8 @@ func TestGPQAFromJSONL(t *testing.T) {
 	if !strings.Contains(prompt, "Express your final answer") {
 		t.Error("prompt should contain answer instruction")
 	}
-	if conv.MaxTokens != 1024 {
-		t.Errorf("expected MaxTokens=1024, got %d", conv.MaxTokens)
+	if conv.MaxTokens != 16384 {
+		t.Errorf("expected MaxTokens=16384, got %d", conv.MaxTokens)
 	}
 	if conv.ExpectedAnswer != "(A)" && conv.ExpectedAnswer != "(B)" &&
 		conv.ExpectedAnswer != "(C)" && conv.ExpectedAnswer != "(D)" {
@@ -75,7 +75,7 @@ func TestGPQAShufflesChoices(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ds, err := dataset.NewGPQA(path)
+	ds, err := dataset.NewGPQA(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestGPQAWrapsAround(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ds, err := dataset.NewGPQA(path)
+	ds, err := dataset.NewGPQA(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestGPQAEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := dataset.NewGPQA(path)
+	_, err := dataset.NewGPQA(path, 0)
 	if err == nil {
 		t.Error("expected error for empty file")
 	}
@@ -136,7 +136,7 @@ func TestGPQAFingertapFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ds, err := dataset.NewGPQA(path)
+	ds, err := dataset.NewGPQA(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestGPQAPreprocess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ds, err := dataset.NewGPQA(path)
+	ds, err := dataset.NewGPQA(path, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestGPQAPartitionDisjoint(t *testing.T) {
 
 	total := 0
 	for w := 0; w < numWorkers; w++ {
-		ds, err := dataset.NewGPQA(path)
+		ds, err := dataset.NewGPQA(path, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
