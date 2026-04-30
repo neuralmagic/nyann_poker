@@ -63,7 +63,7 @@ Workload types:
 			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer cancel()
 
-			// Auto-detect worker ID from K8s JobSet / indexed Job
+			// Auto-detect worker ID from K8s indexed Job
 			if workerID == 0 {
 				if idx, ok := os.LookupEnv("JOB_COMPLETION_INDEX"); ok {
 					if v, err := strconv.Atoi(idx); err == nil {

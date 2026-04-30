@@ -51,7 +51,7 @@ func evalGSM8KCmd() *cobra.Command {
 Sends all GSM8K test problems with few-shot prompting, evaluates
 correctness of model responses, and reports accuracy alongside latency metrics.
 
-For multi-worker scale-out (e.g., JobSet), use --num-workers and
+For multi-worker scale-out (e.g., Indexed Job), use --num-workers and
 --worker-id to partition the dataset across workers. Each worker runs a
 disjoint slice, and --worker-id auto-detects from JOB_COMPLETION_INDEX.
 
@@ -79,7 +79,7 @@ Example:
 				return fmt.Errorf("--gsm8k-train-path is required when --num-fewshot > 0")
 			}
 
-			// Auto-detect worker ID from K8s JobSet / indexed Job
+			// Auto-detect worker ID from K8s indexed Job
 			if workerID == 0 {
 				if idx, ok := os.LookupEnv("JOB_COMPLETION_INDEX"); ok {
 					if v, err := strconv.Atoi(idx); err == nil {
