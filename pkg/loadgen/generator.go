@@ -394,6 +394,15 @@ func (g *Generator) runStream(ctx context.Context, c *client.Client, streamID in
 			return
 		}
 
+		// Exit early if another stream already exhausted the request budget
+		if state := g.maxReqState.Load(); state != nil && state.limit > 0 {
+			select {
+			case <-state.done:
+				return
+			default:
+			}
+		}
+
 		var p pending
 		select {
 		case p = <-prefetch:
