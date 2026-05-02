@@ -373,13 +373,22 @@ func (g *Generator) runStream(ctx context.Context, c *client.Client, streamID in
 	// Prefetch the next conversation while the current request is in-flight.
 	// This overlaps dataset preparation with network I/O to minimize gaps.
 	type pending struct {
-		conv   dataset.Conversation
-		convID string
+		conv      dataset.Conversation
+		convID    string
+		exhausted bool
 	}
 	prefetch := make(chan pending, 1)
 	nextID := 0
 
 	fill := func() {
+		if state := g.maxReqState.Load(); state != nil && state.limit > 0 {
+			n := state.count.Add(1)
+			if n > state.limit {
+				state.once.Do(func() { close(state.done) })
+				prefetch <- pending{exhausted: true}
+				return
+			}
+		}
 		conv := g.Dataset.NextConversation()
 		id := fmt.Sprintf("w%d-c%d", streamID, nextID)
 		nextID++
@@ -401,12 +410,8 @@ func (g *Generator) runStream(ctx context.Context, c *client.Client, streamID in
 			return
 		}
 
-		if state := g.maxReqState.Load(); state != nil && state.limit > 0 {
-			n := state.count.Add(1)
-			if n > state.limit {
-				state.once.Do(func() { close(state.done) })
-				return
-			}
+		if p.exhausted {
+			return
 		}
 
 		// Start prefetching the next conversation while this request runs
