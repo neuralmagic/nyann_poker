@@ -192,6 +192,23 @@ func TestRenderYAMLCustomImage(t *testing.T) {
 	}
 }
 
+func TestRenderYAMLArgsWithQuotes(t *testing.T) {
+	configJSON := `{"load":{"concurrency":128},"warmup":{"duration":"120s"}}`
+	yaml, err := RenderYAML(KubeConfig{}, "generate", []string{
+		"generate", "--config", configJSON, "--target", "http://vllm:8000/v1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(yaml, `\"concurrency\"`) {
+		t.Error("YAML should escape embedded double quotes in args")
+	}
+	if strings.Contains(yaml, `"{"load"`) {
+		t.Error("YAML should not have unescaped JSON braces breaking the string")
+	}
+}
+
 func TestFlagsToConfig(t *testing.T) {
 	f := Flags{
 		Config: `{"namespace": "test-ns", "workers": 2}`,

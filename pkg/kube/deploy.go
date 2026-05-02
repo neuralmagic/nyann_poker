@@ -164,7 +164,15 @@ type deployParams struct {
 	Volumes   []VolumeSpec
 }
 
-var jobTemplate = template.Must(template.New("job").Parse(`apiVersion: v1
+var funcMap = template.FuncMap{
+	"yamlEscape": func(s string) string {
+		s = strings.ReplaceAll(s, `\`, `\\`)
+		s = strings.ReplaceAll(s, `"`, `\"`)
+		return s
+	},
+}
+
+var jobTemplate = template.Must(template.New("job").Funcs(funcMap).Parse(`apiVersion: v1
 kind: Service
 metadata:
   name: {{ .Name }}
@@ -229,7 +237,7 @@ spec:
               value: "{{ .Name }}-0"
           args:
 {{- range .Args }}
-            - "{{ . }}"
+            - "{{ . | yamlEscape }}"
 {{- end }}
 {{- if .Volumes }}
           volumeMounts:
