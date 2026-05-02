@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -913,6 +914,55 @@ func TestGeneratorMaxRequestsZero(t *testing.T) {
 	// With MaxRequests=0 (unlimited), should have many records from 300ms run
 	if len(records) < 2 {
 		t.Fatalf("expected multiple records with unlimited max_requests, got %d", len(records))
+	}
+}
+
+// countingDataset wraps a dataset and counts calls to NextConversation.
+type countingDataset struct {
+	inner dataset.Dataset
+	draws int64
+}
+
+func (d *countingDataset) NextConversation() dataset.Conversation {
+	atomic.AddInt64(&d.draws, 1)
+	return d.inner.NextConversation()
+}
+
+func TestGeneratorMaxRequestsHighConcurrency(t *testing.T) {
+	addr := startMockServer(t)
+
+	rec := recorder.NewMemory()
+	ds := &countingDataset{inner: dataset.NewSynthetic(32, 10, 1, 4.0)}
+
+	gen := &loadgen.Generator{
+		Target:   "http://" + addr + "/v1",
+		Model:    "test-model",
+		Dataset:  ds,
+		Recorder: rec,
+	}
+
+	const maxReqs = 20
+	// Concurrency (128) far exceeds MaxRequests (20).
+	// Without the fill()-level gate, each stream prefetches an item before
+	// checking the budget, causing 128+ NextConversation() calls for only
+	// 20 allowed requests. For a finite dataset (GSM8K/GPQA) this burns
+	// through the index and wraps around, re-issuing items.
+	stages := []loadgen.Stage{
+		{Concurrency: 128, Duration: 30 * time.Second, MaxRequests: maxReqs},
+	}
+
+	gen.RunStages(context.Background(), stages, nil, nil)
+
+	rec.Close()
+	records := rec.Records()
+
+	if len(records) != maxReqs {
+		t.Fatalf("expected exactly %d records, got %d", maxReqs, len(records))
+	}
+
+	draws := atomic.LoadInt64(&ds.draws)
+	if draws != maxReqs {
+		t.Fatalf("expected exactly %d dataset draws, got %d (overshoot wastes finite dataset indices)", maxReqs, draws)
 	}
 }
 
